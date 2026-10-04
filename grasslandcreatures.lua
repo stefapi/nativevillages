@@ -1,5 +1,103 @@
 local S = minetest.get_translator("nativevillages")
 
+-- Factory function for creating grassland NPC variants to reduce repetition
+local function create_grassland_npc(base_config, variant_config)
+    local config = table.copy(base_config)
+    for key, value in pairs(variant_config) do
+        config[key] = value
+    end
+    return config
+end
+
+-- Base configuration for grassland NPCs
+local base_grassland_npc = {
+    type = "npc",
+    passive = false,
+    attack_type = "dogfight",
+    attacks_monsters = true,
+    attack_npcs = false,
+    owner_loyal = true,
+    pathfinding = true,
+    armor = 100,
+    collisionbox = {-0.35, -1.0, -0.35, 0.35, 0.8, 0.35},
+    visual = "mesh",
+    drawtype = "front",
+    makes_footstep_sound = true,
+    walk_velocity = 1,
+    walk_chance = 15,
+    run_velocity = 3,
+    jump = true,
+    drops = {},
+    water_damage = 0,
+    lava_damage = 2,
+    light_damage = 0,
+    follow = {},
+    view_range = 15,
+    owner = "",
+    order = "follow",
+    fear_height = 3,
+    animation = {
+        speed_normal = 50,
+        stand_start = 0,
+        stand_end = 100,
+        walk_start = 100,
+        walk_end = 200,
+        punch_speed = 100,
+        punch_start = 200,
+        punch_end = 300,
+        die_start = 200,
+        die_end = 300,
+        die_speed = 50,
+        die_loop = false,
+        die_rotate = true,
+    },
+    on_rightclick = function(self, clicker)
+        -- feed to heal npc
+        if mobs:feed_tame(self, clicker, 8, true, true) then return end
+        -- capture npc with net or lasso
+        if mobs:capture_mob(self, clicker, 0, 15, 25, false, nil) then return end
+        -- protect npc with mobs:protector
+        if mobs:protect(self, clicker) then return end
+
+        local item = clicker:get_wielded_item()
+        local name = clicker:get_player_name()
+
+        -- right clicking with bread drops random item
+        if item:get_name() == "farming:bread" or item:get_name() == "farming:garlic_bread" or item:get_name() == "ethereal:banana_bread" then
+            if not mobs.is_creative(name) then
+                item:take_item()
+                clicker:set_wielded_item(item)
+            end
+
+            local pos = self.object:get_pos()
+            pos.y = pos.y + 0.5
+
+            local drops = self.npc_drops or mobs.grasslandfemale_drops
+            minetest.add_item(pos, {
+                name = drops[math.random(1, #drops)]
+            })
+
+            minetest.chat_send_player(name, S("Grasslander dropped you an item for bread!"))
+            return
+        end
+
+        -- by right-clicking owner can switch npc between follow and stand
+        if self.owner and self.owner == name then
+            if self.order == "follow" then
+                self.attack = nil
+                self.order = "stand"
+                self.state = "stand"
+                self:set_animation("stand")
+                self:set_velocity(0)
+                minetest.chat_send_player(name, S("Grasslander stands still."))
+            else
+                self.order = "follow"
+                minetest.chat_send_player(name, S("Grasslander will follow you."))
+            end
+        end
+    end,
+}
+
 mobs:register_mob("nativevillages:grasslandcow", {
 	stepheight = 1,
 	type = "animal",
@@ -70,12 +168,12 @@ mobs:register_mob("nativevillages:grasslandcow", {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:grasslandcow",
-	nodes = {"default:dirt_with_grass", "default:dirt_with_coniferous_litter", "default:clay"},
+	nodes = nativevillages.biomes.get_ground("grassland", "forest"),
 	neighbors = {"nativevillages:cowdropping"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 3,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -95,138 +193,40 @@ mobs.grasslandfemale_drops = {
 	"default:copper_lump", "default:tin_lump", "mobs:meat"
 }
 
-mobs:register_mob("nativevillages:grasslandfemale", {
-	type = "npc",
-	passive = false,
+-- Register grassland female using factory function
+mobs:register_mob("nativevillages:grasslandfemale", create_grassland_npc(base_grassland_npc, {
 	damage = 3,
-	attack_type = "dogfight",
-	attacks_monsters = true,
-	attack_npcs = false,
-	owner_loyal = true,
-	pathfinding = true,
 	hp_min = 40,
 	hp_max = 70,
-	armor = 100,
-	collisionbox = {-0.35,-1.0,-0.35, 0.35,0.8,0.35},
-	visual = "mesh",
 	mesh = "Grasslandfemale.b3d",
-	drawtype = "front",
 	textures = {
 		{"texturegrasslandfemale.png"},
 		{"texturegrasslandfemale2.png"},
 		{"texturegrasslandfemale3.png"},
 		{"texturegrasslandfemale4.png"},
-
 	},
 	child_texture = {
-		{"texturegrasslandbabyf.png"}, 
+		{"texturegrasslandbabyf.png"},
 	},
-	makes_footstep_sound = true,
-sounds = {
+	sounds = {
 		attack = "nativevillages_grasslandfemale2",
 		random = "nativevillages_grasslandfemale",
 		damage = "nativevillages_grasslandfemale3",
 		death = "nativevillages_grasslandfemale3",
 		distance = 10,
 	},
-	walk_velocity = 1,
-        walk_chance = 15,
-	run_velocity = 3,
-	jump = true,
-	drops = {
-	},
-	water_damage = 0,
-	lava_damage = 2,
-	light_damage = 0,
-	follow = {},
-        stay_near = {{"nativevillages:grasslandbarrel"}, 5},
-	view_range = 15,
-	owner = "",
-	order = "follow",
-	fear_height = 3,
-	animation = {
-		speed_normal = 50,
-		stand_start = 0,
-		stand_end = 100,
-		walk_start = 100,
-		walk_end = 200,
-                punch_speed = 100,
-		punch_start = 200,
-		punch_end = 300,
-		die_start = 200,
-		die_end = 300,
-		die_speed = 50,
-		die_loop = false,
-		die_rotate = true,
-	},
-
-	on_rightclick = function(self, clicker)
-
-		-- feed to heal npc
-		if mobs:feed_tame(self, clicker, 8, true, true) then return end
-
-		-- capture npc with net or lasso
-		if mobs:capture_mob(self, clicker, 0, 15, 25, false, nil) then return end
-
-		-- protect npc with mobs:protector
-		if mobs:protect(self, clicker) then return end
-
-		local item = clicker:get_wielded_item()
-		local name = clicker:get_player_name()
-
-		-- right clicking with gold lump drops random item from mobs.grasslandfemale_drops
-		if item:get_name() == "farming:bread" or item:get_name() == "farming:garlic_bread" or item:get_name() == "ethereal:banana_bread" then
-
-			if not mobs.is_creative(name) then
-				item:take_item()
-				clicker:set_wielded_item(item)
-			end
-
-			local pos = self.object:get_pos()
-
-			pos.y = pos.y + 0.5
-
-			local drops = self.npc_drops or mobs.grasslandfemale_drops
-
-			minetest.add_item(pos, {
-				name = drops[math.random(1, #drops)]
-			})
-
-			minetest.chat_send_player(name, S("Grasslander dropped you an item for bread!"))
-
-			return
-		end
-
-		-- by right-clicking owner can switch npc between follow and stand
-		if self.owner and self.owner == name then
-
-			if self.order == "follow" then
-
-				self.attack = nil
-				self.order = "stand"
-				self.state = "stand"
-				self:set_animation("stand")
-				self:set_velocity(0)
-
-				minetest.chat_send_player(name, S("Grasslander stands still."))
-			else
-				self.order = "follow"
-
-				minetest.chat_send_player(name, S("Grasslander will follow you."))
-			end
-		end
-	end,
-})
+	stay_near = {{"nativevillages:grasslandbarrel"}, 5},
+}))
 
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:grasslandfemale",
-	nodes = {"default:dirt_with_grass", "default:cobble", "default:dirt_with_coniferous_litter", "default:clay"},
+	nodes = nativevillages.biomes.get_ground("grassland", "forest"),
 	neighbors = {"nativevillages:grasslandbarrel"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -242,138 +242,40 @@ mobs.grasslandmale_drops = {
 	"default:copper_lump", "default:tin_lump", "mobs:meat"
 }
 
-mobs:register_mob("nativevillages:grasslandmale", {
-	type = "npc",
-	passive = false,
+-- Register grassland male using factory function
+mobs:register_mob("nativevillages:grasslandmale", create_grassland_npc(base_grassland_npc, {
 	damage = 5,
-	attack_type = "dogfight",
-	attacks_monsters = true,
-	attack_npcs = false,
-	owner_loyal = true,
-	pathfinding = true,
 	hp_min = 70,
 	hp_max = 90,
-	armor = 100,
-	collisionbox = {-0.35,-1.0,-0.35, 0.35,0.8,0.35},
-	visual = "mesh",
 	mesh = "Grasslandmale.b3d",
-	drawtype = "front",
 	textures = {
 		{"texturegrasslandmale.png"},
 		{"texturegrasslandmale2.png"},
 		{"texturegrasslandmale3.png"},
 		{"texturegrasslandmale4.png"},
-
 	},
 	child_texture = {
 		{"texturegrasslandbabym.png"},
 	},
-	makes_footstep_sound = true,
-sounds = {
+	sounds = {
 		attack = "nativevillages_grasslandmale2",
 		random = "nativevillages_grasslandmale",
 		damage = "nativevillages_grasslandmale3",
 		death = "nativevillages_grasslandmale3",
 		distance = 10,
 	},
-	walk_velocity = 1,
-        walk_chance = 15,
-	run_velocity = 3,
-	jump = true,
-	drops = {
-	},
-	water_damage = 0,
-	lava_damage = 2,
-	light_damage = 0,
-	follow = {},
-        stay_near = {{"nativevillages:grasslandbarrel"}, 5},
-	view_range = 15,
-	owner = "",
-	order = "follow",
-	fear_height = 3,
-	animation = {
-		speed_normal = 50,
-		stand_start = 0,
-		stand_end = 100,
-		walk_start = 100,
-		walk_end = 200,
-                punch_speed = 100,
-		punch_start = 200,
-		punch_end = 300,
-		die_start = 200,
-		die_end = 300,
-		die_speed = 50,
-		die_loop = false,
-		die_rotate = true,
-	},
-
-	on_rightclick = function(self, clicker)
-
-		-- feed to heal npc
-		if mobs:feed_tame(self, clicker, 8, true, true) then return end
-
-		-- capture npc with net or lasso
-		if mobs:capture_mob(self, clicker, 0, 15, 25, false, nil) then return end
-
-		-- protect npc with mobs:protector
-		if mobs:protect(self, clicker) then return end
-
-		local item = clicker:get_wielded_item()
-		local name = clicker:get_player_name()
-
-		-- right clicking with gold lump drops random item from mobs.grasslandmale_drops
-		if item:get_name() == "farming:bread" or item:get_name() == "farming:garlic_bread" or item:get_name() == "ethereal:banana_bread" then
-
-			if not mobs.is_creative(name) then
-				item:take_item()
-				clicker:set_wielded_item(item)
-			end
-
-			local pos = self.object:get_pos()
-
-			pos.y = pos.y + 0.5
-
-			local drops = self.npc_drops or mobs.grasslandmale_drops
-
-			minetest.add_item(pos, {
-				name = drops[math.random(1, #drops)]
-			})
-
-			minetest.chat_send_player(name, S("Grasslander dropped you an item for bread!"))
-
-			return
-		end
-
-		-- by right-clicking owner can switch npc between follow and stand
-		if self.owner and self.owner == name then
-
-			if self.order == "follow" then
-
-				self.attack = nil
-				self.order = "stand"
-				self.state = "stand"
-				self:set_animation("stand")
-				self:set_velocity(0)
-
-				minetest.chat_send_player(name, S("Grasslander stands still."))
-			else
-				self.order = "follow"
-
-				minetest.chat_send_player(name, S("Grasslander will follow you."))
-			end
-		end
-	end,
-})
+	stay_near = {{"nativevillages:grasslandbarrel"}, 5},
+}))
 
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:grasslandmale",
-	nodes = {"default:dirt_with_grass", "default:cobble", "default:dirt_with_coniferous_litter", "default:clay"},
+	nodes = nativevillages.biomes.get_ground("grassland", "forest"),
 	neighbors = {"nativevillages:grasslandbarrel"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -434,7 +336,7 @@ sounds = {
 	lava_damage = 2,
 	light_damage = 0,
 	follow = {},
-        stay_near = {{"nativevillages:grasslandalta"}, 4},
+        stay_near = {{"nativevillages:grasslandaltar"}, 4},
 	view_range = 15,
 	owner = "",
 	order = "follow",
@@ -516,12 +418,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:grasslandwitch",
-	nodes = {"default:dirt_with_grass", "default:clay"},
+	nodes = nativevillages.biomes.get_ground("grassland", "forest"),
 	neighbors = {"nativevillages:grasslandaltar"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })

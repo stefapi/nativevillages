@@ -26,13 +26,6 @@ stepheight = 1,
 		distance = 10,
 	},
 	makes_footstep_sound = true,
-sounds = {
-		attack = "nativevillages_lion2",
-		random = "nativevillages_lion",
-		damage = "nativevillages_lion4",
-		death = "nativevillages_lion3",
-		distance = 10,
-	},
 	walk_velocity = 1,
 	run_velocity = 3,
 	runaway = false,
@@ -81,11 +74,11 @@ if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:malelion",
 	neighbors = {"nativevillages:savannacorpse"},
-	nodes = {"default:dry_dirt_with_dry_grass"},
+	nodes = nativevillages.biomes.get_ground("savanna"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 10,
 	max_height = 50,
 
@@ -168,11 +161,11 @@ if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:femalelion",
 	neighbors = {"nativevillages:savannacorpse"},
-	nodes = {"default:dry_dirt_with_dry_grass"},
+	nodes = nativevillages.biomes.get_ground("savanna"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 10,
 	max_height = 50,
 
@@ -304,12 +297,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:savannadoctor",
-	nodes = {"default:dry_dirt_with_dry_grass", "default:clay"},
+	nodes = nativevillages.biomes.get_ground("savanna"),
 	neighbors = {"nativevillages:savannavshrine"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -440,12 +433,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:savannaqueen",
-	nodes = {"default:dry_dirt_with_dry_grass", "default:clay"},
+	nodes = nativevillages.biomes.get_ground("savanna"),
 	neighbors = {"nativevillages:savannathrone"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -579,12 +572,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:savannamale",
-	nodes = {"default:dry_dirt_with_dry_grass", "default:clay"},
+	nodes = nativevillages.biomes.get_ground("savanna"),
 	neighbors = {"nativevillages:savannavessels"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -715,12 +708,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:savannaking",
-	nodes = {"default:dry_dirt_with_dry_grass", "default:clay"},
+	nodes = nativevillages.biomes.get_ground("savanna"),
 	neighbors = {"nativevillages:savannathrone"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -853,12 +846,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:savannafemale",
-	nodes = {"default:dry_dirt_with_dry_grass", "default:clay"},
+	nodes = nativevillages.biomes.get_ground("savanna"),
 	neighbors = {"nativevillages:savannavessels"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })

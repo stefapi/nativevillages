@@ -1,7 +1,7 @@
 local S = minetest.get_translator("nativevillages")
 
 minetest.register_node("nativevillages:grasslandaltar", {
-    description = "Altar",
+    description = S("Altar"),
     visual_scale = 1,
     mesh = "Grasslandaltar.b3d",
     tiles = {"texturegrasslandaltar.png"},

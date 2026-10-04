@@ -1,0 +1,3 @@
+# If enabled, logs the resolution of every biome category and ground node
+# list once all mods are loaded (see biomes.lua)
+nativevillages.debug_biomes (Native Villages debug biomes) bool false

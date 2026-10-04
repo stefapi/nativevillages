@@ -127,12 +127,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:desertvillagermale",
-	nodes = {"default:desert_sand", "group:wool"},
+	nodes = nativevillages.biomes.get_ground("desert"),
 	neighbors = {"nativevillages:desertcrpet"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -269,12 +269,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:desertvillagerfemale",
-	nodes = {"default:desert_sand", "group:wool"},
+	nodes = nativevillages.biomes.get_ground("desert"),
 	neighbors = {"nativevillages:desertcrpet"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -407,12 +407,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:desertslavetrader",
-	nodes = {"default:desert_sand", "group:wool"},
+	nodes = nativevillages.biomes.get_ground("desert"),
 	neighbors = {"nativevillages:desertcage"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -492,12 +492,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:desertranger",
-	nodes = {"default:desert_sand", "group:wool"},
+	nodes = nativevillages.biomes.get_ground("desert"),
 	neighbors = {"nativevillages:hookah"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -576,12 +576,12 @@ on_rightclick = function(self, clicker)
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:desertraider",
-	nodes = {"default:desert_sand", "group:wool"},
+	nodes = nativevillages.biomes.get_ground("desert"),
 	neighbors = {"nativevillages:hookah"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -606,7 +606,7 @@ stepheight = 1,
 	visual = "mesh",
 	mesh = "Desertchicken.b3d",
 	textures = {
-		{"texturedesertchicken.png"}, 
+		{"texturedesertchicken.png"},
 
 	},
 	child_texture = {
@@ -682,11 +682,11 @@ stepheight = 1,
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:desertchicken",
-	nodes = {"default:clay", "default:desert_sand"}, 
+	nodes = nativevillages.biomes.get_ground("desert"),
 	neighbors = {"nativevillages:desertseeds"},
 	min_light = 0,
 	interval = 60,
-	chance = 1, -- 15000
+	chance = 15000,
 	active_object_count = 3,
 	min_height = 0,
 	max_height = 100,
@@ -791,13 +791,13 @@ local mobs_shoot_egg = function (item, player, pointed_thing)
 	ent.velocity = egg_VELOCITY -- needed for api internal timing
 	ent.switch = 1 -- needed so that egg doesn't despawn straight away
 
-	obj:setvelocity({
+	obj:set_velocity({
 		x = dir.x * egg_VELOCITY,
 		y = dir.y * egg_VELOCITY,
 		z = dir.z * egg_VELOCITY
 	})
 
-	obj:setacceleration({
+	obj:set_acceleration({
 		x = dir.x * -3,
 		y = -egg_GRAVITY,
 		z = dir.z * -3
@@ -823,7 +823,7 @@ minetest.register_node(":nativevillages:egg", {
 	wield_image = "mobs_chicken_egg.png",
 	paramtype = "light",
 	walkable = false,
-	is_ground_content = true,
+	is_ground_content = false,
 	sunlight_propagates = true,
 	selection_box = {
 		type = "fixed",

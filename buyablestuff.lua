@@ -30,7 +30,7 @@ mobs:register_mob("nativevillages:tamecatfish", {
 	walk_velocity = 1,
 	run_velocity = 2,
 	fly = true,
-	fly_in = "default:water_source", "default:river_water_source", "default:water_flowing", "default:river_water_flowing",
+	fly_in = {"default:water_source", "default:river_water_source", "default:water_flowing", "default:river_water_flowing"},
 	fall_speed = 0,
 	jump = true,
 	jump_height = 0,
@@ -103,7 +103,7 @@ minetest.register_craft({
 })
 
 
-local S = mobs.intllib
+local S = minetest.get_translator("nativevillages")
 
 mobs:register_mob("nativevillages:zombietame", {
 	type = "npc",
@@ -136,7 +136,7 @@ mobs:register_mob("nativevillages:zombietame", {
 	walk_velocity = 2,
 	run_velocity = 3,
 	jump = true,
-	drops = {		
+	drops = {
 	},
         stay_near = {{"nativevillages:cannibalshrine", "nativevillages:driedpeople"}, 5},
 	water_damage = 0,
@@ -474,10 +474,10 @@ stepheight = 1,
 	visual = "mesh",
 	mesh = "Desertchicken.b3d",
 	textures = {
-		{"texturedesertchicken.png"}, 
-		{"texturedesertchicken2.png"}, 
-		{"texturedesertchicken3.png"}, 
-		{"texturedesertchicken4.png"}, 
+		{"texturedesertchicken.png"},
+		{"texturedesertchicken2.png"},
+		{"texturedesertchicken3.png"},
+		{"texturedesertchicken4.png"},
 
 	},
 	child_texture = {
@@ -556,7 +556,7 @@ stepheight = 1,
 
 mobs:register_egg("nativevillages:desertchickentame", S("Domesticated Desert Chicken"), "adesertchicken.png", 0)
 
-local S = mobs.intllib
+local S = minetest.get_translator("nativevillages")
 
 mobs:register_mob("nativevillages:maleliontame", {
 	type = "npc",
@@ -592,7 +592,7 @@ mobs:register_mob("nativevillages:maleliontame", {
         stepheight = 2,
         fear_height = 3,
         stay_near = {{"nativevillages:savannacorpse", "mobs:meatblock"}, 5},
-	drops = {		
+	drops = {
 	},
 	water_damage = 0,
 	lava_damage = 2,
@@ -662,7 +662,7 @@ speed_normal = 75,
 
 mobs:register_egg("nativevillages:maleliontame", S("Tamed Male Lion"), "amalelion.png" )
 
-local S = mobs.intllib
+local S = minetest.get_translator("nativevillages")
 
 mobs:register_mob("nativevillages:femaleliontame", {
 	type = "npc",
@@ -695,7 +695,7 @@ mobs:register_mob("nativevillages:femaleliontame", {
 	walk_velocity = 2,
 	run_velocity = 3,
 	jump = true,
-	drops = {		
+	drops = {
 	},
         stay_near = {{"nativevillages:savannacorpse", "mobs:meatblock"}, 5},
 	water_damage = 0,

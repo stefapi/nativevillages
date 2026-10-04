@@ -71,7 +71,7 @@ mobs:register_mob("nativevillages:icedog", {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:icedog",
-	nodes = {"default:snowblock"},
+	nodes = nativevillages.biomes.get_ground("arctic"),
 	neighbors = {"nativevillages:sledge"},
 	min_light = 14,
 	interval = 60,
@@ -211,12 +211,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:icesledgetrader",
-	nodes = {"default:snowblock"},
+	nodes = nativevillages.biomes.get_ground("arctic"),
 	neighbors = {"nativevillages:sledge"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -249,7 +249,7 @@ mobs:register_mob("nativevillages:icevillagerfemale", {
 
 	},
 	child_texture = {
-		{"textureicevillagerfemalebaby.png"}, 
+		{"textureicevillagerfemalebaby.png"},
 	},
 	makes_footstep_sound = true,
 sounds = {
@@ -351,12 +351,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:icevillagerfemale",
-	nodes = {"default:snowblock", "wool:brown"},
+	nodes = nativevillages.biomes.get_ground("arctic"),
 	neighbors = {"nativevillages:blanket"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -389,7 +389,7 @@ mobs:register_mob("nativevillages:icevillagermale", {
 
 	},
 	child_texture = {
-		{"textureicevillagermalebaby.png"}, 
+		{"textureicevillagermalebaby.png"},
 	},
 	makes_footstep_sound = true,
 sounds = {
@@ -491,12 +491,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:icevillagermale",
-	nodes = {"default:snowblock", "wool:brown"},
+	nodes = nativevillages.biomes.get_ground("arctic"),
 	neighbors = {"nativevillages:blanket"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -504,11 +504,6 @@ end
 
 mobs:register_egg("nativevillages:icevillagermale", S("Male Icelander"), "aicevillagermale.png")
 
-
--- Load support for intllib.
-local MP = minetest.get_modpath(minetest.get_current_modname())
-local S = minetest.get_translator and minetest.get_translator("nativevillages") or
-		dofile(MP .. "/intllib.lua")
 
 -- 0.4.17 or 5.0 check
 local y_off = 20
@@ -550,7 +545,7 @@ mobs:register_mob("nativevillages:sledgewithdog", {
 		die_rotate = true,
 	},
 	textures = {
-		{"texturesledgewithdog.png"}, 
+		{"texturesledgewithdog.png"},
 
 	},
 	fear_height = 3,

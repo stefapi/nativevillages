@@ -40,9 +40,9 @@ stepheight = 0.0,
 		speed_normal = 50,
 		stand_start = 200,
 		stand_end = 300,
-		fly_start = 0, 
+		fly_start = 0,
 		fly_end = 100,
-		fly2_start = 100, 
+		fly2_start = 100,
 		fly2_end = 200,
 		die_start = 200,
 		die_end = 300,
@@ -67,11 +67,11 @@ stepheight = 0.0,
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:lakecatfish",
-	nodes = {"default:water_source"}, {"default:river_water_source"},
+	nodes = {"default:water_source", "default:river_water_source"},
 	neighbors = {"nativevillages:fishtrap"},
 	min_light = 0,
 	interval = 60,
-	chance = 1, -- 15000
+	chance = 15000,
 	active_object_count = 3,
 	min_height = -10,
 	max_height = 30,
@@ -207,12 +207,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:lakevillagerfemale",
-	nodes = {"default:pine_wood"},
+	nodes = nativevillages.biomes.get_ground("lake"),
 	neighbors = {"nativevillages:hangingfish"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -345,12 +345,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:lakevillagerfisher",
-	nodes = {"default:pine_wood"},
+	nodes = nativevillages.biomes.get_ground("lake"),
 	neighbors = {"nativevillages:fishtrap"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })
@@ -486,12 +486,12 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:lakevillagermale",
-	nodes = {"default:pine_wood"},
+	nodes = nativevillages.biomes.get_ground("lake"),
 	neighbors = {"nativevillages:hangingfish"},
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
-	chance = 1, -- 15000
+	chance = 15000,
 	min_height = 0,
 	max_height = 120,
 })

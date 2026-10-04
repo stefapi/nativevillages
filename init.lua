@@ -1,11 +1,10 @@
 
--- Load support for intllib.
+-- Initialize nativevillages namespace
+nativevillages = {}
+
 local path = minetest.get_modpath(minetest.get_current_modname()) .. "/"
 
-local S = minetest.get_translator and minetest.get_translator("nativevillages") or
-		dofile(path .. "intllib.lua")
-
-mobs.intllib = S
+local S = minetest.get_translator("nativevillages")
 
 
 -- Check for custom mob spawn file
@@ -17,6 +16,10 @@ if input then
 	input = nil
 end
 
+
+-- Biome resolution layer (must load before the buildings files so that
+-- nativevillages.biomes.get() / get_ground() are available)
+dofile(path .. "biomes.lua") --
 
 -- Buildings
 

@@ -1,9 +1,0 @@
-mobs
-default
-people
-farming
-animalworld?
-ethereal?
-xocean?
-fishing?
-hunger_ng?

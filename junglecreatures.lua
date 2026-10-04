@@ -70,7 +70,7 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:cannibalking",
-	nodes = {"default:junglewood"},
+	nodes = nativevillages.biomes.get_ground("jungle"),
 	neighbors = {"nativevillages:cannibalshrine"},
 	min_light = 0,
 	interval = 60,
@@ -178,7 +178,7 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:cannibalarcher",
-	nodes = {"default:junglewood"},
+	nodes = nativevillages.biomes.get_ground("jungle"),
 	neighbors = {"nativevillages:cannibalshrine"},
 	min_light = 0,
 	interval = 60,
@@ -259,7 +259,7 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:cannibalmurderer",
-	nodes = {"default:junglewood"},
+	nodes = nativevillages.biomes.get_ground("jungle"),
 	neighbors = {"nativevillages:driedpeople"},
 	min_light = 0,
 	interval = 60,
@@ -341,7 +341,7 @@ sounds = {
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:cannibalchild",
-	nodes = {"default:junglewood"},
+	nodes = nativevillages.biomes.get_ground("jungle"),
 	neighbors = {"nativevillages:driedpeople"},
 	min_light = 0,
 	interval = 60,

@@ -6,7 +6,7 @@ stepheight = 3,
 	passive = false,
 	attack_type = "explode",
 	explosion_radius = 2,
-	explosion_damage__radius = 6,
+	explosion_damage_radius = 6,
 	explosion_timer = 2,
 	attack_npcs = false,
 	attack_animals = false,
@@ -23,15 +23,6 @@ stepheight = 3,
 		{"texturetoad.png"},
 
 	},
-sounds = {
-		random = "",},
-	makes_footstep_sound = true,
-	walk_velocity = 1.5,
-	run_velocity = 2,
-	runaway = true,
-        runaway_from = {"animalworld:bear", "animalworld:crocodile", "animalworld:tiger", "animalworld:spider", "animalworld:spidermale", "animalworld:shark", "animalworld:hyena", "animalworld:kobra", "animalworld:monitor", "animalworld:snowleopard", "animalworld:volverine", "livingfloatlands:deinotherium", "livingfloatlands:carnotaurus", "livingfloatlands:lycaenops", "livingfloatlands:smilodon", "livingfloatlands:tyrannosaurus", "livingfloatlands:velociraptor", "animalworld:divingbeetle", "animalworld:scorpion"},
-	jump = true,
-	jump_height = 6,
 	sounds = {
 		attack = "nativevillages_toad",
 		random = "nativevillages_toad2",
@@ -39,6 +30,13 @@ sounds = {
 		death = "nativevillages_toad",
 		distance = 10,
 	},
+	makes_footstep_sound = true,
+	walk_velocity = 1.5,
+	run_velocity = 2,
+	runaway = true,
+        runaway_from = {"animalworld:bear", "animalworld:crocodile", "animalworld:tiger", "animalworld:spider", "animalworld:spidermale", "animalworld:shark", "animalworld:hyena", "animalworld:kobra", "animalworld:monitor", "animalworld:snowleopard", "animalworld:volverine", "livingfloatlands:deinotherium", "livingfloatlands:carnotaurus", "livingfloatlands:lycaenops", "livingfloatlands:smilodon", "livingfloatlands:tyrannosaurus", "livingfloatlands:velociraptor", "animalworld:divingbeetle", "animalworld:scorpion"},
+	jump = true,
+	jump_height = 6,
 	drops = {
 		{name = "mobs:meat_raw", chance = 1, min = 1, max = 1},
 	},
@@ -69,22 +67,20 @@ sounds = {
 })
 
 
-if minetest.get_modpath("ethereal") then
-	spawn_on = "ethereal:prairie_dirt", "default:dirt_with_grass", "ethereal:green_dirt"
-end
-
+-- Spawn grounds resolved dynamically from every compatible biome
+-- (grassland, jungle, savanna), including optional biome mods
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:toad",
-	nodes = {"default:dirt_with_grass"}, {"default:dirt_with_rainforest_litter"}, {"default:dry_dirt_with_dry_grass"},
+	nodes = nativevillages.biomes.get_ground("grassland", "jungle", "savanna"),
 	neighbors = {"group:grass", "group:normal_grass"},
 	min_light = 0,
 	interval = 60,
-	chance = 2000, -- 15000
+	chance = 15000,
 	active_object_count = 1,
 	min_height = 1,
 	max_height = 15,
-        day_toogle = false
+        day_toggle = false
 })
 end
 
@@ -97,11 +93,11 @@ mobs:alias_mob("nativevillages:toad", "nativevillages:toad") -- compatibility
 
 mobs:register_mob("nativevillages:toadtamed", {
 stepheight = 3,
-	type = "NPC",
+	type = "npc",
 	passive = false,
 	attack_type = "explode",
 	explosion_radius = 4,
-	explosion_damage__radius = 12,
+	explosion_damage_radius = 12,
 	explosion_timer = 4,
 	attack_npcs = false,
 	attack_animals = false,
@@ -153,7 +149,7 @@ sounds = {
 	floats = 0,
 	follow = {"fishing:bait:worm", "ethereal:worm", "animalworld:ant", "animalworld:termite"},
 	view_range = 13,
-	
+
 on_rightclick = function(self, clicker)
 
 		-- feed to heal npc
