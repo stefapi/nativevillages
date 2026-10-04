@@ -512,12 +512,20 @@ if minetest.features.object_independent_selectionbox then
 end
 
 -- horse shoes (speed, jump, break, overlay texture)
-local shoes = {
+-- keep only shoe types actually registered by the people mod, the people mod
+-- currently never registers these craftitems so the feature stays dormant
+local shoes = {}
+
+for shoe_name, shoe_stats in pairs({
 	["people:horseshoe_steel"] = {7, 4, 2, "people_horseshoe_steelo.png"},
 	["people:horseshoe_bronze"] = {7, 4, 4, "people_horseshoe_bronzeo.png"},
 	["people:horseshoe_mese"] = {9, 5, 8, "people_horseshoe_meseo.png"},
 	["people:horseshoe_diamond"] = {10, 6, 6, "people_horseshoe_diamondo.png"}
-}
+}) do
+	if minetest.registered_items[shoe_name] then
+		shoes[shoe_name] = shoe_stats
+	end
+end
 
 -- rideable sledge
 mobs:register_mob("nativevillages:sledgewithdog", {
@@ -683,6 +691,14 @@ mobs:register_mob("nativevillages:sledgewithdog", {
 
 			-- apply horseshoes
 			if item:find("people:horseshoe") then
+
+				-- ignore unknown or unregistered shoe items instead of erroring
+				if not shoes[item] then
+					minetest.chat_send_player(player_name,
+							S("These horse shoes are not supported."))
+
+					return
+				end
 
 				-- drop any existing shoes
 				if self.shoed then
