@@ -21,6 +21,15 @@ end
 -- nativevillages.biomes.get() / get_ground() are available)
 dofile(path .. "biomes.lua") --
 
+-- Soil adaptation of the placed schematics to the anchor biome (must load
+-- after biomes.lua, which it consumes, and before placement.lua, which
+-- consumes nativevillages.soil in turn)
+dofile(path .. "soil_replacement.lua") --
+
+-- Placement engine and building factory (must load before the buildings
+-- files so that nativevillages.placement.register_building() is available)
+dofile(path .. "placement.lua") --
+
 -- Buildings
 
 

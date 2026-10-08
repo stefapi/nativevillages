@@ -1,91 +1,66 @@
 local S = minetest.get_translator("nativevillages")
 
-minetest.register_decoration({
-    name = "nativevillages:icehouse1",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("arctic"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.0001,
-    biomes = nativevillages.biomes.get("arctic"),
-    y_max = 3.5,
-    y_min = 1.0,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/icehouse1_30_90.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
+-- Data driven definitions of the arctic buildings. Every entry is
+-- passed to nativevillages.placement.register_building() (placement.lua),
+-- which decides how the building is actually placed.
 
-minetest.register_decoration({
-    name = "nativevillages:icehouse2",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("arctic"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.0001,
-    biomes = nativevillages.biomes.get("arctic"),
-    y_max = 3.5,
-    y_min = 1.0,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/icehouse2_30_90.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
+local buildings = {
+    {
+        name = "icehouse1",
+        schematic = "icehouse1_30_90.mts",
+        biomes = {"arctic"},
+        offset = -29,
+        y_max = 3.5,
+        y_min = 1.0,
+        fill_ratio = 0.0001,
+    },
+    {
+        name = "icehouse2",
+        schematic = "icehouse2_30_90.mts",
+        biomes = {"arctic"},
+        offset = -29,
+        y_max = 3.5,
+        y_min = 1.0,
+        fill_ratio = 0.0001,
+    },
+    {
+        name = "icehouse3",
+        schematic = "icehouse3_30_90.mts",
+        biomes = {"arctic"},
+        offset = -29,
+        y_max = 3.5,
+        y_min = 1.0,
+        fill_ratio = 0.0001,
+    },
+    {
+        name = "icelogs",
+        schematic = "icelogs_30_90.mts",
+        biomes = {"arctic"},
+        offset = -29,
+        y_max = 3.5,
+        y_min = 1.0,
+        fill_ratio = 0.0001,
+    },
+    {
+        name = "icepelts",
+        schematic = "icepelts_30_90.mts",
+        biomes = {"arctic"},
+        offset = -29,
+        y_max = 3.5,
+        y_min = 1.0,
+        fill_ratio = 0.0001,
+    },
+    {
+        name = "icesledge",
+        schematic = "icesledge_30_90.mts",
+        biomes = {"arctic"},
+        offset = -29,
+        y_max = 3.5,
+        y_min = 1.0,
+        fill_ratio = 0.0001,
+    },
+}
 
-minetest.register_decoration({
-    name = "nativevillages:icehouse3",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("arctic"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.0001,
-    biomes = nativevillages.biomes.get("arctic"),
-    y_max = 3.5,
-    y_min = 1.0,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/icehouse3_30_90.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
-
-minetest.register_decoration({
-    name = "nativevillages:icelogs",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("arctic"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.0001,
-    biomes = nativevillages.biomes.get("arctic"),
-    y_max = 3.5,
-    y_min = 1.0,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/icelogs_30_90.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
-
-minetest.register_decoration({
-    name = "nativevillages:icepelts",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("arctic"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.0001,
-    biomes = nativevillages.biomes.get("arctic"),
-    y_max = 3.5,
-    y_min = 1.0,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/icepelts_30_90.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
-
-minetest.register_decoration({
-    name = "nativevillages:icesledge",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("arctic"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.0001,
-    biomes = nativevillages.biomes.get("arctic"),
-    y_max = 3.5,
-    y_min = 1.0,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/icesledge_30_90.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
+for _, def in ipairs(buildings) do
+    nativevillages.placement.register_building(def)
+end

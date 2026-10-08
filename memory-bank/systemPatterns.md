@@ -12,6 +12,9 @@ Native Villages Mod
 │   ├── {biome}buildings.lua (Building schematics)
 │   └── {biome}creatures.lua (Creatures and entities)
 ├── Support modules
+│   ├── biomes.lua (Biome resolution layer)
+│   ├── soil_replacement.lua (Biome-adaptive schematic ground)
+│   ├── placement.lua (Flatness-aware placement engine)
 │   ├── intllib.lua (Internationalization)
 │   ├── buyablestuff.lua (Trading system)
 │   └── hunger.lua (Hunger mechanics)
@@ -41,6 +44,12 @@ Native Villages Mod
 - **Biome Separation**: Each biome has dedicated files for blocks, buildings, and creatures
 - **Functional Decomposition**: Clear separation between generation, entities, and gameplay
 - **Namespace Isolation**: All content prefixed with `nativevillages:` to prevent conflicts
+
+### Schematic Soil Adaptation (implemented 2026-10-08; multi-point election added same day, iteration 2)
+- **Multi-point biome election (iteration 2)**: the biome carried by `job.biome_name` is elected by `S.elect(votes, anchor_biome, accepted_set)` — a pure, unit tested function of soil_replacement.lua — from 9 votes collected on the 3×3 grid of the real rotated footprint (same grid positions as the flatness test; water anchors vote at the constant `bed_y`, ground anchors at each point's real surface) ; relative majority, the anchor biome wins ties and is the fallback; **water anchored buildings filter votes on `def.biome_set`** (never grass under water), ground anchored ones vote open. Cost: +9 `get_biome_data` on accepted sites only
+- **Declarative replacement table**: `nativevillages.soil` (soil_replacement.lua) resolves the elected biome surface node (`node_top` of `minetest.registered_biomes`, per-category fallback via biomes.lua `category_of`) and caches a `{source = target}` table per biome (negative answers cached via `false`)
+- **Engine-native application**: the table feeds the 4th `replacement` argument of `minetest.place_schematic` in placement.lua (elected biome name carried by `job.biome_name`) — replacement happens during .mts decoding, zero extra map writes
+- **Opt-out setting**: `nativevillages.adapt_soil` (default true) restores the historical untouched soils (the election still runs, `replacement_for` then returns nil); the historical decoration mode (`use_new_placement = false`) is not covered (documented limitation, see plans/proposition-sol-biomes.md §0/§5.4 and plans/proposition-sol-biomes-echantillonnage.md §4.9)
 
 ### Performance Optimizations
 - **Lazy Loading**: Schematics loaded only when needed during generation

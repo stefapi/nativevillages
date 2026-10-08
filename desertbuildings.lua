@@ -1,121 +1,84 @@
 local S = minetest.get_translator("nativevillages")
 
-minetest.register_decoration({
-    name = "nativevillages:deserthouse1",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("desert"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.00005,
-    biomes = nativevillages.biomes.get("desert"),
-    y_max = 30.5,
-    y_min = 25.5,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/deserthouse1_30_180.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
+-- Data driven definitions of the desert buildings. Every entry is
+-- passed to nativevillages.placement.register_building() (placement.lua),
+-- which decides how the building is actually placed.
 
-minetest.register_decoration({
-    name = "nativevillages:deserthouse2",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("desert"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.00005,
-    biomes = nativevillages.biomes.get("desert"),
-    y_max = 30.5,
-    y_min = 25.5,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/deserthouse2_30_180.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
+local buildings = {
+    {
+        name = "deserthouse1",
+        schematic = "deserthouse1_30_180.mts",
+        biomes = {"desert"},
+        offset = -29,
+        y_max = 30.5,
+        y_min = 25.5,
+        fill_ratio = 0.00005,
+    },
+    {
+        name = "deserthouse2",
+        schematic = "deserthouse2_30_180.mts",
+        biomes = {"desert"},
+        offset = -29,
+        y_max = 30.5,
+        y_min = 25.5,
+        fill_ratio = 0.00005,
+    },
+    {
+        name = "deserthouse3",
+        schematic = "deserthouse3_30_180.mts",
+        biomes = {"desert"},
+        offset = -29,
+        y_max = 30.5,
+        y_min = 25.5,
+        fill_ratio = 0.00005,
+    },
+    {
+        name = "deserthouse4",
+        schematic = "deserthouse4_30_180.mts",
+        biomes = {"desert"},
+        offset = -29,
+        y_max = 30.5,
+        y_min = 25.5,
+        fill_ratio = 0.00005,
+    },
+    {
+        name = "deserthouse5",
+        schematic = "deserthouse5_30_0.mts",
+        biomes = {"desert"},
+        offset = -29,
+        y_max = 30.5,
+        y_min = 25.5,
+        fill_ratio = 0.00005,
+    },
+    {
+        name = "desertwell",
+        schematic = "desertwell_30_0.mts",
+        biomes = {"desert"},
+        offset = -29,
+        y_max = 30.5,
+        y_min = 25.5,
+        fill_ratio = 0.00004,
+    },
+    {
+        name = "desertmarket",
+        schematic = "desertmarket_30_0.mts",
+        biomes = {"desert"},
+        offset = -29,
+        y_max = 30.5,
+        y_min = 25.5,
+        fill_ratio = 0.00008,
+    },
+    {
+        name = "desertstable",
+        schematic = "deserstable_30_0.mts",
+        biomes = {"desert"},
+        offset = -29,
+        y_max = 30.5,
+        y_min = 25.5,
+        fill_ratio = 0.00004,
+    },
+}
 
-minetest.register_decoration({
-    name = "nativevillages:deserthouse3",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("desert"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.00005,
-    biomes = nativevillages.biomes.get("desert"),
-    y_max = 30.5,
-    y_min = 25.5,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/deserthouse3_30_180.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
-
-minetest.register_decoration({
-    name = "nativevillages:deserthouse4",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("desert"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.00005,
-    biomes = nativevillages.biomes.get("desert"),
-    y_max = 30.5,
-    y_min = 25.5,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/deserthouse4_30_180.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
-
-minetest.register_decoration({
-    name = "nativevillages:deserthouse5",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("desert"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.00005,
-    biomes = nativevillages.biomes.get("desert"),
-    y_max = 30.5,
-    y_min = 25.5,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/deserthouse5_30_0.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
-
-minetest.register_decoration({
-    name = "nativevillages:desertwell",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("desert"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.00004,
-    biomes = nativevillages.biomes.get("desert"),
-    y_max = 30.5,
-    y_min = 25.5,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/desertwell_30_0.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
-
-minetest.register_decoration({
-    name = "nativevillages:desertmarket",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("desert"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.00008,
-    biomes = nativevillages.biomes.get("desert"),
-    y_max = 30.5,
-    y_min = 25.5,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/desertmarket_30_0.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
-
-minetest.register_decoration({
-    name = "nativevillages:desertstable",
-    deco_type = "schematic",
-    place_on = nativevillages.biomes.get_ground("desert"),
-    place_offset_y = -29,
-    sidelen = 16,
-    fill_ratio = 0.00004,
-    biomes = nativevillages.biomes.get("desert"),
-    y_max = 30.5,
-    y_min = 25.5,
-    schematic = minetest.get_modpath("nativevillages").."/schematics/deserstable_30_0.mts",
-    flags = "force_placement",
-    rotation = "random",
-})
+for _, def in ipairs(buildings) do
+    nativevillages.placement.register_building(def)
+end

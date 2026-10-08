@@ -40,6 +40,21 @@
 - **Parameter Isolation**: Changed function to ignore potentially incorrect rng parameter and use internal mock RNG
 - **Method Consistency**: Ensured mock RNG has all required methods (next, next_within, next_boolean, next_integer)
 
+### Biome-Adaptive Building Soil (2026-10-08, IMPLÉMENTÉ — tests en jeu en attente)
+- **Fonctionnalité implémentée** conformément à plans/proposition-sol-biomes.md (§0 « Statut d'implémentation », numéros de ligne vérifiés) : nouveau module `soil_replacement.lua` (`nativevillages.soil`) + remontée du biome d'ancrage dans placement.lua jusqu'au 4ᵉ argument `replacement` de `minetest.place_schematic`
+- **Fichiers touchés** : soil_replacement.lua (créé) ; placement.lua (modifié : `biome_name_at()`/`biome_ok()` retournent le nom du biome, `accept_site()` stocke `job.biome_name`, table de remplacement passée au placement différé) ; init.lua (dofile entre biomes.lua et placement.lua) ; settingtypes.txt (`nativevillages.adapt_soil`, défaut true)
+- **Sources remplacées** : `default:dirt_with_grass` (famille grassland), `default:dry_dirt_with_dry_grass` (famille savanna, ajout issu de l'audit des .mts), `mcl_core:dirt_with_grass` (sémantique Mineclonia, ignoré sous MTG) ; remplissages de fondations (`dirt`, `dry_dirt`, `desert_sand`, `snowblock`) volontairement exclus (risque de colonnes pleine hauteur)
+- **Résolution de la cible** : `node_top` du biome réel enregistré (biomes tiers ethereal/ebiomes inclus, sable du lit pour les ancres water, neige pour ice), puis fallback par catégorie logique (miroir de `ground_base` de biomes.lua), sinon sol intact ; table mise en cache par biome (cache négatif via `false`)
+- **Écart unique vs spéc §4.2** : source savanna `default:dry_dirt_with_dry_grass` ajoutée (audit §5.1 du plan) ; **limitation documentée** : mode historique (`use_new_placement = false`) non couvert ; syntaxe validée (`texluac -p` → SYNTAX OK)
+- **Prochaine étape** : tests en jeu selon la matrice §5.3 du plan (biomes MTG nominaux, biomes tiers, frontières de biome, rotations, régression `adapt_soil = false`)
+
+### Multi-Point Biome Sampling — Itération 2 (2026-10-08, IMPLÉMENTÉ — tests en jeu en attente)
+- **Fonctionnalité implémentée** conformément à plans/proposition-sol-biomes-echantillonnage.md (§0 « Statut d'implémentation », numéros de ligne vérifiés sur les fichiers réels) : le biome décidant du sol est désormais **élu par échantillonnage 3×3 de l'emprise réelle post-rotation**, et non plus mesuré au seul point d'ancre
+- **Fichiers touchés** : soil_replacement.lua (AJOUT : `S.elect(votes, anchor_biome, accepted_set)`, fonction pure ≈ l.95-143 — majorité relative, l'ancre gagne les égalités, fallback ancre, filtrage optionnel sur un ensemble) ; placement.lua (MODIF : branche water ≈ l.748-781 — grille 3×3 à `bed_y` constant, élection filtrée sur `def.biome_set` ; branche ground ≈ l.872-913 — grille 3×3 à la surface réelle de chaque point après `flat`, élection ouverte ; log debug « soil biome elected X over anchor Y » dans les deux branches) ; `accept_site`, job, `minetest.after`, `place_schematic` inchangés — `job.biome_name` porte le biome élu
+- **Comportement livré** : site homogène → élu = ancre → identique itération 1 ; frontière → biome dominant ; égalité → ancre ; poche atypique contenant l'ancre → corrigée par les 8 autres votes ; ancres water jamais d'herbe sous l'eau (votes filtrés) ; `adapt_soil = false` → l'élection tourne (choix assumé §4.7) mais `replacement_for` retourne nil → comportement historique ; coût +9 `get_biome_data` sur sites acceptés uniquement
+- **Vérifications** : `texluac -p` → SYNTAX OK (2 fichiers) ; harnais hors jeu (texlua + stubs minetest, nettoyé ensuite) : 15 tests `S.elect` couvrant la matrice §5.2 — tous passés ; commentaires d'origine conservés (harmonisation annulée par l'utilisateur) ; précision : un vote nil n'entre jamais dans la table (`votes[#votes+1] = nil` est un no-op Lua, sémantiquement équivalent au §4.4)
+- **Prochaine étape** : tests en jeu selon la matrice §5.2 du plan d'échantillonnage (régression ancre unique, frontières 5/4 et 4/4 + ancre, bâtiments lake sur berge, rotations, biomes tiers, poches atypiques, opt-out)
+
 ### Biome Mapping Integration (Current)
 - **Extra Biomes Compatibility**: Created mapping system to use extra_biomes mod for enhanced village generation
 - **Biome Conversion**: Mapped Mineclonia biomes to extra_biomes equivalents:
@@ -65,7 +80,7 @@
 ## Next Steps
 
 ### Immediate Priorities
-1. **Testing Phase**: Validate all biome implementations in Minetest environment
+1. **Testing Phase**: Validate all biome implementations in Minetest environment, including the biome-adaptive building soil (itération 1 : plans/proposition-sol-biomes.md §5.3 matrix) and the multi-point elected biome (itération 2 : plans/proposition-sol-biomes-echantillonnage.md §5.2 matrix)
 2. **Performance Profiling**: Identify and optimize bottleneck areas
 3. **Documentation Update**: Ensure all new features are properly documented
 4. **Community Feedback**: Address issues reported by users
