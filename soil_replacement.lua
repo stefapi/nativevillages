@@ -25,7 +25,8 @@ nativevillages.soil = S
 
 -- Generic schematic ground nodes subject to replacement. Audit of the
 -- schematics/*.mts node name headers: the grassland family carries
--- default:dirt_with_grass and the savanna family
+-- default:dirt_with_grass, the jungle family
+-- default:dirt_with_rainforest_litter and the savanna family
 -- default:dry_dirt_with_dry_grass as surface ground, while their 30-node
 -- foundations are filled with default:dirt / default:dry_dirt (never
 -- listed here: replacing the filler would raise full-height columns of
@@ -39,6 +40,7 @@ nativevillages.soil = S
 -- simply skipped when the node is not registered (minetest_game).
 local sources = {
     "default:dirt_with_grass",
+    "default:dirt_with_rainforest_litter",
     "default:dry_dirt_with_dry_grass",
     "mcl_core:dirt_with_grass",
     -- possible phase 2 extension: low vegetation (default:grass_1, ...)

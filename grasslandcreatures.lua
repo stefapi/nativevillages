@@ -218,11 +218,14 @@ mobs:register_mob("nativevillages:grasslandfemale", create_grassland_npc(base_gr
 	stay_near = {{"nativevillages:grasslandbarrel"}, 5},
 }))
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:grasslandfemale",
 	nodes = nativevillages.biomes.get_ground("grassland", "forest"),
-	neighbors = {"nativevillages:grasslandbarrel"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:grasslandbarrel"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
@@ -231,6 +234,7 @@ mobs:spawn({
 	max_height = 120,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:grasslandfemale", S("Female Grasslander"), "agrasslandfemale.png")
 
@@ -267,11 +271,14 @@ mobs:register_mob("nativevillages:grasslandmale", create_grassland_npc(base_gras
 	stay_near = {{"nativevillages:grasslandbarrel"}, 5},
 }))
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:grasslandmale",
 	nodes = nativevillages.biomes.get_ground("grassland", "forest"),
-	neighbors = {"nativevillages:grasslandbarrel"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:grasslandbarrel"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
@@ -280,6 +287,7 @@ mobs:spawn({
 	max_height = 120,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:grasslandmale", S("Male Grasslander"), "agrasslandmale.png")
 

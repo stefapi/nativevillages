@@ -979,6 +979,15 @@ if use_new then
                             minetest.log("action", "[nativevillages] soil adapted for "
                                 .. job.name .. " in biome " .. job.biome_name)
                         end
+                        -- deterministic population of the placed building
+                        -- (beds, native trigger nodes, anvils): purely
+                        -- additive, silent no-op when the
+                        -- nativevillages.deterministic_spawn setting is
+                        -- disabled or the building category is unknown
+                        local Spawn = nativevillages.spawn
+                        if Spawn and Spawn.populate then
+                            pcall(Spawn.populate, job)
+                        end
                     else
                         -- nothing was written: drop the registered
                         -- footprint, it must not block future sites

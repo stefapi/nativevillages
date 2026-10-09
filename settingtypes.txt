@@ -80,3 +80,22 @@ nativevillages.debug_placement (Native Villages debug placement) bool false
 # building is anchored in (see soil_replacement.lua); disable to keep the
 # schematic soils untouched
 nativevillages.adapt_soil (Native Villages adapt building soil to biome) bool true
+
+# If enabled, every building placed by the new placement engine is
+# deterministically populated right after placement: one inhabitant per
+# bed (male/female alternated), one mob per native trigger node
+# (barrel, hookah, hangingfish, ...) and one villager per anvil, all
+# capped at 8 entities per building (see spawn.lua). The statistical
+# mobs:spawn channel keeps running either way, its neighbours lists
+# being enriched with the bed nodes of the running game; disable to
+# rely on the statistical channel only (historical behaviour)
+# Si activé, chaque bâtiment posé par le nouveau moteur de placement est
+# peuplé de façon déterministe juste après sa pose : un habitant par lit
+# (alternance homme/femme), un mob par nœud déclencheur natif (barrique,
+# narguilé, poisson suspendu, ...) et un villageois par enclume, le tout
+# plafonné à 8 entités par bâtiment (voir spawn.lua). Le canal
+# statistique mobs:spawn continue de tourner dans tous les cas, ses
+# listes de voisins étant enrichies des nœuds de lit du jeu en cours ;
+# désactiver pour ne compter que sur le canal statistique
+# (comportement historique)
+nativevillages.deterministic_spawn (Native Villages deterministic building population) bool true

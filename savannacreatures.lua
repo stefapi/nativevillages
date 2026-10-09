@@ -569,11 +569,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:savannamale",
 	nodes = nativevillages.biomes.get_ground("savanna"),
-	neighbors = {"nativevillages:savannavessels"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:savannavessels"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
@@ -582,6 +585,7 @@ mobs:spawn({
 	max_height = 120,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:savannamale", S("Male Savanna Villager"), "asavannamale.png")
 
@@ -843,11 +847,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:savannafemale",
 	nodes = nativevillages.biomes.get_ground("savanna"),
-	neighbors = {"nativevillages:savannavessels"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:savannavessels"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
@@ -856,6 +863,7 @@ mobs:spawn({
 	max_height = 120,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:savannafemale", S("Female Savanna Villager"), "asavannafemale.png")
 

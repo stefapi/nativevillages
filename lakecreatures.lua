@@ -204,11 +204,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:lakevillagerfemale",
 	nodes = nativevillages.biomes.get_ground("lake"),
-	neighbors = {"nativevillages:hangingfish"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:hangingfish"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
@@ -217,6 +220,7 @@ mobs:spawn({
 	max_height = 120,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:lakevillagerfemale", S("Female Lake Villager"), "alakevillagerfemale.png")
 
@@ -342,11 +346,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:lakevillagerfisher",
 	nodes = nativevillages.biomes.get_ground("lake"),
-	neighbors = {"nativevillages:fishtrap"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:fishtrap"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
@@ -355,6 +362,7 @@ mobs:spawn({
 	max_height = 120,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:lakevillagerfisher", S("Fisher"), "alakevillagerfisher.png")
 
@@ -483,11 +491,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:lakevillagermale",
 	nodes = nativevillages.biomes.get_ground("lake"),
-	neighbors = {"nativevillages:hangingfish"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:hangingfish"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 1,
@@ -496,6 +507,7 @@ mobs:spawn({
 	max_height = 120,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:lakevillagermale", S("Male Lake Villager"), "alakevillagermale.png")
 

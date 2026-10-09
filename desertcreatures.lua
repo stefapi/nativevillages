@@ -124,11 +124,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:desertvillagermale",
 	nodes = nativevillages.biomes.get_ground("desert"),
-	neighbors = {"nativevillages:desertcrpet"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:desertcrpet"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
@@ -137,6 +140,7 @@ mobs:spawn({
 	max_height = 120,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:desertvillagermale", S("Male Desert Villager"), "adesertvillagermale.png")
 
@@ -266,11 +270,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:desertvillagerfemale",
 	nodes = nativevillages.biomes.get_ground("desert"),
-	neighbors = {"nativevillages:desertcrpet"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:desertcrpet"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
@@ -279,6 +286,7 @@ mobs:spawn({
 	max_height = 120,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:desertvillagerfemale", S("Female Desert Villager"), "adesertvillagerfemale.png")
 

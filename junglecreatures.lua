@@ -67,11 +67,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:cannibalking",
 	nodes = nativevillages.biomes.get_ground("jungle"),
-	neighbors = {"nativevillages:cannibalshrine"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:cannibalshrine"),
 	min_light = 0,
 	interval = 60,
 	chance = 2, -- 15000
@@ -79,6 +82,7 @@ mobs:spawn({
 	max_height = 40,
 })
 end
+end)
 
 mobs:register_arrow("nativevillages:fireball", {
 	visual = "sprite",
@@ -175,11 +179,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:cannibalarcher",
 	nodes = nativevillages.biomes.get_ground("jungle"),
-	neighbors = {"nativevillages:cannibalshrine"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:cannibalshrine"),
 	min_light = 0,
 	interval = 60,
 	chance = 2, -- 15000
@@ -188,6 +195,7 @@ mobs:spawn({
 	max_height = 40,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:cannibalarcher", S("Cannibal Hunter"), "acannibalarcher.png")
 
@@ -256,11 +264,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:cannibalmurderer",
 	nodes = nativevillages.biomes.get_ground("jungle"),
-	neighbors = {"nativevillages:driedpeople"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:driedpeople"),
 	min_light = 0,
 	interval = 60,
 	active_object_count = 2,
@@ -269,6 +280,7 @@ mobs:spawn({
 	max_height = 40,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:cannibalmurderer", S("Cannibal Murderer"), "acannibalmurderer.png")
 
@@ -338,11 +350,14 @@ sounds = {
 	end,
 })
 
+-- deferred to register_on_mods_loaded so the neighbours can be enriched
+-- with every bed node of the running game (see spawn.lua)
+minetest.register_on_mods_loaded(function()
 if not mobs.custom_spawn_nativevillages then
 mobs:spawn({
 	name = "nativevillages:cannibalchild",
 	nodes = nativevillages.biomes.get_ground("jungle"),
-	neighbors = {"nativevillages:driedpeople"},
+	neighbors = nativevillages.spawn.neighbors_for("nativevillages:driedpeople"),
 	min_light = 0,
 	interval = 60,
 	chance = 2, -- 15000
@@ -351,5 +366,6 @@ mobs:spawn({
 	max_height = 40,
 })
 end
+end)
 
 mobs:register_egg("nativevillages:cannibalchild", S("Cannibal Child"), "acannibalchild.png")

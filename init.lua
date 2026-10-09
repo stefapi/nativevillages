@@ -7,8 +7,9 @@ local path = minetest.get_modpath(minetest.get_current_modname()) .. "/"
 local S = minetest.get_translator("nativevillages")
 
 
--- Check for custom mob spawn file
-local input = io.open(path .. "spawn.lua", "r")
+-- Check for custom mob spawn file (custom_spawn.lua; the mod's own
+-- spawn.lua is the centralised spawning layer, NOT an override)
+local input = io.open(path .. "custom_spawn.lua", "r")
 
 if input then
 	mobs.custom_spawn_nativevillages = true
@@ -29,6 +30,12 @@ dofile(path .. "soil_replacement.lua") --
 -- Placement engine and building factory (must load before the buildings
 -- files so that nativevillages.placement.register_building() is available)
 dofile(path .. "placement.lua") --
+
+-- Centralised spawning layer (must load after placement.lua, whose
+-- deferred jobs call nativevillages.spawn.populate(), and before the
+-- *creatures.lua files, whose mobs:spawn calls use
+-- nativevillages.spawn.neighbors_for() inside register_on_mods_loaded)
+dofile(path .. "spawn.lua") --
 
 -- Buildings
 
@@ -59,7 +66,7 @@ dofile(path .. "hunger.lua") --
 
 -- Load custom spawning
 if mobs.custom_spawn_nativevillages then
-	dofile(path .. "spawn.lua")
+	dofile(path .. "custom_spawn.lua")
 end
 
 
