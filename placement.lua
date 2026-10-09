@@ -668,6 +668,13 @@ local function run_job(job)
         if Spawn and Spawn.populate then
             pcall(Spawn.populate, job)
         end
+        -- hidden randungeon entrance (see dungeon_entrances.lua): same
+        -- guarded pcall pattern, purely additive, no-op without the
+        -- optional randungeon mod
+        local Dungeon = nativevillages.dungeon
+        if Dungeon and Dungeon.maybe_place_hidden_entrance then
+            pcall(Dungeon.maybe_place_hidden_entrance, job)
+        end
     else
         -- nothing was written: drop the registered footprint, it must
         -- not block future sites

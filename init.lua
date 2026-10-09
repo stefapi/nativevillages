@@ -42,6 +42,12 @@ dofile(path .. "village_zones.lua") --
 -- nativevillages.spawn.neighbors_for() inside register_on_mods_loaded)
 dofile(path .. "spawn.lua") --
 
+-- Hidden randungeon entrances under the village houses (must load
+-- after placement.lua, whose run_job calls
+-- nativevillages.dungeon.maybe_place_hidden_entrance(); its randungeon
+-- global probe is lazy, randungeon itself loads after this mod)
+dofile(path .. "dungeon_entrances.lua") --
+
 -- Buildings
 
 

@@ -195,3 +195,35 @@ nativevillages.village_path_range (Native Villages path proximity radius) int 96
 # chemin pathv7 (voir villages_prefer_paths) ; le disque s'élargit aussi
 # en conséquence
 nativevillages.village_path_bonus_slots (Native Villages path bonus slots) int 8 0 28
+
+# If enabled AND the optional randungeon mod is present, a deterministic
+# minority of the placed houses (see randungeon_entrance_chance) receive
+# a secret: a 2x2 of steel trapdoors flush with the house floor, opening
+# on the spiral staircase of a randungeon dungeon built under the
+# village, with nothing visible above the floor. Without randungeon, or
+# when disabled, the behaviour of the mod is strictly unchanged.
+# Si activé ET le mod optionnel randungeon présent, une minorité
+# déterministe des maisons posées (voir randungeon_entrance_chance)
+# reçoit un secret : un 2x2 de trappes acier affleurant le plancher,
+# ouvrant sur l'escalier en spirale d'un donjon randungeon construit
+# sous le village, sans rien de visible au-dessus du sol. Sans
+# randungeon, ou désactivé, le comportement du mod est strictement
+# inchangé.
+nativevillages.randungeon_entrances (Native Villages randungeon hidden entrances) bool true
+
+# Probability per ELIGIBLE house (30 node foundation houses only) of
+# receiving a hidden dungeon entrance (see randungeon_entrances): 0.2
+# gives about one entrance per village of 5-8 houses.
+# Probabilité par maison ÉLIGIBLE (maisons à fondation 30 nodes
+# uniquement) de recevoir une entrée de donjon cachée (voir
+# randungeon_entrances) : 0.2 donne environ une entrée par village de
+# 5-8 maisons.
+nativevillages.randungeon_entrance_chance (Native Villages randungeon entrance chance) float 0.2 0.0 1.0
+
+# Number of levels of the hidden dungeons (see randungeon_entrances):
+# each level adds construction time when the village is placed (the
+# dungeon build briefly blocks the server, one dungeon at a time).
+# Nombre de niveaux des donjons cachés (voir randungeon_entrances) :
+# chaque niveau allonge la construction au placement du village (la
+# construction bloque brièvement le serveur, un donjon à la fois).
+nativevillages.randungeon_entrance_levels (Native Villages randungeon entrance levels) int 3 1 8
