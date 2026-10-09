@@ -27,6 +27,16 @@
 -- minetest.after(0): by the next server step the generated chunk has
 -- been committed to the map, so the schematic can never be overwritten
 -- by the mapgen write-back and is written on real committed map data.
+-- Vertical containment: tall schematics (34..56 node foundations, lake
+-- houses on stilts) routinely extend above or below the fragment the
+-- callback reports, which can be as small as one 16 node mapblock on
+-- this engine. Writing there anyway was the historical cause of
+-- PARTIALLY DRAWN buildings: whatever place_schematic wrote into still
+-- ungenerated mapblocks was overwritten later, when the mapgen finally
+-- generated them. Every deferred placement therefore compares its
+-- footprint to the Y window of the fragment and emerges the missing
+-- mapblocks FIRST through minetest.emerge_area, placing only from the
+-- emerge callback, on fully generated map data.
 -- Anti-collision: the accepted footprint of every building is registered
 -- (in memory for the session, mirrored to the mod storage under the
 -- chunk keys it covers) and every later candidate site is rejected when
@@ -422,7 +432,7 @@ local function site_occupied(box)
     local z1 = box.z1 - min_spacing
     local x2 = box.x2 + min_spacing
     local z2 = box.z2 + min_spacing
-    local hit = false
+    local hit, identical = false, false
     for_keys_overlapped(x1, z1, x2, z2, KEY_GRID, function(key)
         if not hit then
             for _, other in ipairs(load_chunk(key)) do
@@ -430,11 +440,30 @@ local function site_occupied(box)
                     and z1 <= other.z2 and z2 >= other.z1
                     and box.y1 <= other.y2 and box.y2 >= other.y1 then
                     hit = true
+                    -- corner for corner twin of an already PLACED
+                    -- footprint: the signature of a regenerated area
+                    -- (/deleteblocks, world restored without its mod
+                    -- storage) being offered the exact same site again
+                    identical = other.placed
+                        and other.x1 == box.x1 and other.y1 == box.y1
+                        and other.z1 == box.z1 and other.x2 == box.x2
+                        and other.y2 == box.y2 and other.z2 == box.z2
                     break
                 end
             end
         end
     end)
+    if identical then
+        -- loud on purpose: the placement engine works as intended (the
+        -- twin site is rejected), but the surrounding mapblocks were
+        -- regenerated and the building the storage remembers is now
+        -- gone from the map, which looks like a partially drawn village
+        minetest.log("warning", "[nativevillages] candidate at ("
+            .. box.x1 .. "," .. box.y1 .. "," .. box.z1
+            .. ") matches an already placed footprint corner for corner: "
+            .. "regenerated mapblocks or mod storage desync, the twin "
+            .. "site is rejected")
+    end
     return hit
 end
 
@@ -504,9 +533,13 @@ end
 --     the .mts decoding and the rotation natively
 --   * the rotation is drawn from the chunk seeded PRNG before the
 --     flatness test, so the sampled footprint is the placed footprint
---   * candidate sites keep the whole footprint inside the current chunk:
---     a schematic overflowing into a still ungenerated neighbour could be
---     partially overwritten when that neighbour chunk is generated
+--   * candidate sites keep the whole footprint inside the current chunk
+--     on X and Z only: a schematic overflowing into a still ungenerated
+--     neighbour could be partially overwritten when that neighbour chunk
+--     is generated. The Y axis cannot use the same rejection (tall
+--     schematics would never fit a 16 node high fragment), so the
+--     vertical spill is handled at placement time by emerging the
+--     missing mapblocks first (see the deferred placement below)
 if use_new then
     minetest.register_on_generated(function(minp, maxp, blockseed)
         if not ids_ready then
@@ -552,6 +585,7 @@ if use_new then
             accepted = 0,
             no_match = 0, not_flat = 0, collision = 0, too_wide = 0,
             draw_ground = 0, draw_biome = 0, draw_alt = 0, draw_water = 0,
+            deferred = 0,
         }
 
         local vm = minetest.get_mapgen_object("voxelmanip")
@@ -944,11 +978,22 @@ if use_new then
         -- One recap line per generated chunk (debug_placement) so the
         -- effect of the density setting is directly readable in
         -- debug.txt: how many sites were tried, how many were accepted
-        -- and where the rejections went
+        -- and where the rejections went. The deferred count is derived
+        -- synchronously from the queue (the spill test only reads the
+        -- footprint against the fragment Y window), because the recap
+        -- must be logged BEFORE the deferred placements start
+        for _, job in ipairs(queue) do
+            if job.box.y1 < minp.y or job.box.y2 > maxp.y then
+                stats.deferred = stats.deferred + 1
+            end
+        end
         if debug_placement then
             minetest.log("action", "[nativevillages] chunk (" .. minp.x .. ","
-                .. minp.z .. "): sites tried=" .. tries
+                .. minp.z .. ") fragment=" .. csize .. "x"
+                .. (maxp.z - minp.z + 1) .. "x" .. (maxp.y - minp.y + 1)
+                .. ": sites tried=" .. tries
                 .. " accepted=" .. stats.accepted
+                .. " deferred=" .. stats.deferred
                 .. " | site rejections: no_drawing=" .. stats.no_match
                 .. " not_flat=" .. stats.not_flat
                 .. " collision=" .. stats.collision
@@ -962,43 +1007,84 @@ if use_new then
         if #queue > 0 then
             minetest.after(0, function()
                 for _, job in ipairs(queue) do
-                    -- ground adaptation table of the anchor biome, applied
-                    -- by the engine while the .mts is decoded (nil keeps
+                    -- Real placement of one accepted job. Ground
+                    -- adaptation table of the elected biome, applied by
+                    -- the engine while the .mts is decoded (nil keeps
                     -- the schematic ground untouched, the historical
                     -- behaviour)
-                    local repl = Soil.replacement_for(job.biome_name)
-                    local ok = minetest.place_schematic(job.pos, job.schematic,
-                        tostring(job.rot), repl, true)
-                    if ok then
-                        -- the footprint is really on the map, persist it
-                        commit_box(job.box)
-                        minetest.log("action", "[nativevillages] placed " .. job.name
-                            .. " at (" .. job.pos.x .. "," .. job.pos.y .. "," .. job.pos.z
-                            .. ") rot=" .. job.rot)
-                        if debug_placement and repl then
-                            minetest.log("action", "[nativevillages] soil adapted for "
-                                .. job.name .. " in biome " .. job.biome_name)
+                    local function place_job()
+                        local repl = Soil.replacement_for(job.biome_name)
+                        local ok = minetest.place_schematic(job.pos,
+                            job.schematic, tostring(job.rot), repl, true)
+                        if ok then
+                            -- the footprint is really on the map, persist it
+                            commit_box(job.box)
+                            minetest.log("action", "[nativevillages] placed "
+                                .. job.name .. " at (" .. job.pos.x .. ","
+                                .. job.pos.y .. "," .. job.pos.z
+                                .. ") rot=" .. job.rot)
+                            if debug_placement and repl then
+                                minetest.log("action", "[nativevillages] soil adapted for "
+                                    .. job.name .. " in biome " .. job.biome_name)
+                            end
+                            -- deterministic population of the placed building
+                            -- (beds, native trigger nodes, anvils): purely
+                            -- additive, silent no-op when the
+                            -- nativevillages.deterministic_spawn setting is
+                            -- disabled or the building category is unknown
+                            local Spawn = nativevillages.spawn
+                            if Spawn and Spawn.populate then
+                                pcall(Spawn.populate, job)
+                            end
+                        else
+                            -- nothing was written: drop the registered
+                            -- footprint, it must not block future sites
+                            discard_box(job.box)
+                            minetest.log("warning", "[nativevillages] could not place "
+                                .. job.name .. " at (" .. job.pos.x .. "," .. job.pos.y .. ","
+                                .. job.pos.z .. "), footprint discarded")
                         end
-                        -- deterministic population of the placed building
-                        -- (beds, native trigger nodes, anvils): purely
-                        -- additive, silent no-op when the
-                        -- nativevillages.deterministic_spawn setting is
-                        -- disabled or the building category is unknown
-                        local Spawn = nativevillages.spawn
-                        if Spawn and Spawn.populate then
-                            pcall(Spawn.populate, job)
+                    end
+
+                    -- VERTICAL CONTAINMENT. When the footprint extends
+                    -- above or below the fragment the callback reports,
+                    -- the missing mapblocks must be generated FIRST:
+                    -- place_schematic happily writes into ungenerated
+                    -- mapblocks, and the mapgen later overwrites them,
+                    -- leaving a partially drawn building. emerge_area
+                    -- generates (or loads) the whole 3D box of the
+                    -- footprint, and the placement only runs from the
+                    -- final emerge callback, on committed map data.
+                    -- The extra on_generated calls the emerge triggers
+                    -- for the freshly generated mapblocks are harmless:
+                    -- their Y window sits above or below the surface,
+                    -- so their site draws die on the ground test, and
+                    -- the anti-collision registry rejects the rest
+                    local box = job.box
+                    if box.y1 < minp.y or box.y2 > maxp.y then
+                        if debug_placement then
+                            minetest.log("action", "[nativevillages] deferring "
+                                .. job.name .. " at (" .. job.pos.x .. ","
+                                .. job.pos.y .. "," .. job.pos.z .. "): footprint y "
+                                .. box.y1 .. ".." .. box.y2
+                                .. " spills out of fragment y " .. minp.y
+                                .. ".." .. maxp.y .. ", emerging it first")
                         end
+                        minetest.emerge_area(
+                            {x = box.x1, y = box.y1, z = box.z1},
+                            {x = box.x2, y = box.y2, z = box.z2},
+                            function(_, _, remaining)
+                                if remaining <= 0 then
+                                    place_job()
+                                end
+                            end)
                     else
-                        -- nothing was written: drop the registered
-                        -- footprint, it must not block future sites
-                        discard_box(job.box)
-                        minetest.log("warning", "[nativevillages] could not place "
-                            .. job.name .. " at (" .. job.pos.x .. "," .. job.pos.y
-                            .. "," .. job.pos.z .. "), footprint discarded")
+                        place_job()
                     end
                 end
             end)
         end
     end)
 end
+
 
