@@ -45,6 +45,16 @@
 -- inside a chunk or across neighbouring chunks. The registry only knows
 -- the buildings placed by this engine: buildings of other mods and the
 -- historical decoration fallback are invisible to it.
+-- Village grouping (see village_zones.lua): on top of the scattered
+-- sites, a deterministic coarse grid elects village cores and a plan of
+-- building SLOTS around them. Every fragment a village spans processes
+-- the slots whose POINT it hosts (one host per slot, whatever the chunk
+-- generation order), the drawing still being elected by the REAL ground
+-- of the slot through the very tests below: a village follows the
+-- topography, a ravine or a shore simply punches holes in the plan. A
+-- slot whose footprint crosses the fragment border is deferred behind
+-- an emerge_area of its union footprint, the XZ counterpart of the
+-- vertical containment below.
 
 nativevillages = nativevillages or {}
 
@@ -120,6 +130,22 @@ local relax_altitude = minetest.settings:get_bool(
     "nativevillages.relax_altitude", false)
 local RELAX_DOWN = 10
 local RELAX_UP = 30
+-- Multiplier of the scattered site density inside the village zones
+-- (see village_zones.lua): the surroundings of a village must not
+-- constellation with lone houses. 0 forbids the scattered channel
+-- inside a zone, 1 keeps the exact outside density
+local scatter_in_village = tonumber(minetest.settings:get(
+    "nativevillages.scatter_in_village") or "") or 0.25
+if scatter_in_village < 0 then
+    scatter_in_village = 0
+elseif scatter_in_village > 1 then
+    scatter_in_village = 1
+end
+
+-- Village grouping layer (bound lazily: placement.lua loads BEFORE
+-- village_zones.lua per init.lua, the local V is captured at the first
+-- generated chunk instead)
+local V = nil
 
 -- The engine indexes the mapgen voxelmanip through its emerged area, an
 -- API only available since Minetest 5.1. The capability CANNOT be probed
@@ -180,6 +206,16 @@ minetest.log("action", "[nativevillages] placement engine "
         .. ", altitude bands " .. (relax_altitude and "relaxed" or "historical")
         .. ", max_sites_per_chunk=" .. max_tries_per_chunk .. ")"
     or "FALLBACK (historical mapgen decorations, NO anti-collision)"))
+-- Village grouping availability, logged once at startup like the engine
+-- line above (village_zones.lua loads after this file: probe the setting
+-- directly, the layer itself is bound at the first generated chunk)
+local villages_on = minetest.settings:get_bool(
+    "nativevillages.use_villages", true)
+
+minetest.log("action", "[nativevillages] village grouping "
+    .. (use_new and villages_on and "ACTIVE (deterministic zones, see village_zones.lua)"
+        or "DISABLED (" .. (use_new and "use_villages=false" or "engine fallback")
+        .. ")"))
 
 -- All buildings registered through the factory, in registration order
 -- (a stable drawing order keeps the engine deterministic per chunk seed)
@@ -525,6 +561,550 @@ local function discard_box(box)
     end
 end
 
+-- Name of the biome at a position, nil when the engine cannot answer
+-- (module level: the deferred village slot validation reuses it from
+-- its emerge callback, outside on_generated)
+local function biome_name_at(x, y, z)
+    local bdata = minetest.get_biome_data({x = x, y = y, z = z})
+    if not bdata then
+        return nil
+    end
+    return minetest.get_biome_name(bdata.biome)
+end
+
+-- Biome check against the exact biome name set of the building (the
+-- same list the historical decorations passed as biomes=). Also
+-- returns the accepted biome name so the site can adapt its schematic
+-- ground to it (see soil_replacement.lua)
+local function biome_ok(x, y, z, biome_set)
+    local name = biome_name_at(x, y, z)
+    if name == nil or not biome_set[name] then
+        return false, nil
+    end
+    return true, name
+end
+
+-- Height and content id of the first non-air node of a column,
+-- scanning down from top to yfloor (nil when the whole column is air).
+-- Parameterized by its voxel view (area + data + floor) so the
+-- deferred village slot validation reuses the very scan on a manually
+-- read VoxelManip
+local function vm_top_node(va, data, yfloor, x, z, top)
+    for y = top, yfloor, -1 do
+        local id = data[va:index(x, y, z)]
+        if id ~= air_id and id ~= ignore_id then
+            return y, id
+        end
+    end
+    return nil
+end
+
+-- Ground node height of a column, or nil when the site must be
+-- rejected: the first non-air node has to be an acceptable ground node
+-- (the historical place_on contract: a tree, a building or a wrong
+-- surface node on top rejects the site). Water anchored schematics
+-- skip the liquid column down to the lake bed instead
+local function vm_ground_height(va, data, yfloor, x, z, ground_set, skip_liquids, top)
+    for y = top, yfloor, -1 do
+        local id = data[va:index(x, y, z)]
+        if id ~= air_id and id ~= ignore_id then
+            if skip_liquids and water_ids[id] then
+                -- keep scanning through the water column
+            elseif ground_set[id] then
+                return y
+            else
+                return nil
+            end
+        end
+    end
+    return nil
+end
+
+-- Civic drawings for the village core slots: the registered buildings
+-- whose name is listed by nativevillages.village.civic. Built lazily
+-- on first use, once every *buildings.lua file has registered
+local civic_list = nil
+local civic_total = 0
+local function civic_registry()
+    if civic_list == nil then
+        civic_list = {}
+        civic_total = 0
+        local Vv = nativevillages.village
+        if Vv and Vv.civic then
+            for _, d in ipairs(registry) do
+                if Vv.civic[d.name] then
+                    civic_list[#civic_list + 1] = d
+                    civic_total = civic_total + d.fill_ratio
+                end
+            end
+        end
+    end
+    return civic_list, civic_total
+end
+
+-- Real placement of one accepted job: ground adaptation table of the
+-- elected biome applied while the .mts is decoded, footprint persisted
+-- once really on the map, deterministic population. Module level: the
+-- deferred village slot validations place through it too
+local function run_job(job)
+    local repl = Soil.replacement_for(job.biome_name)
+    local ok = minetest.place_schematic(job.pos, job.schematic,
+        tostring(job.rot), repl, true)
+    if ok then
+        -- the footprint is really on the map, persist it
+        commit_box(job.box)
+        minetest.log("action", "[nativevillages] placed " .. job.name
+            .. " at (" .. job.pos.x .. "," .. job.pos.y .. "," .. job.pos.z
+            .. ") rot=" .. job.rot .. (job.tag or ""))
+        if debug_placement and repl then
+            minetest.log("action", "[nativevillages] soil adapted for "
+                .. job.name .. " in biome " .. job.biome_name)
+        end
+        -- deterministic population of the placed building (beds, native
+        -- trigger nodes, anvils): purely additive, silent no-op when the
+        -- nativevillages.deterministic_spawn setting is disabled or the
+        -- building category is unknown
+        local Spawn = nativevillages.spawn
+        if Spawn and Spawn.populate then
+            pcall(Spawn.populate, job)
+        end
+    else
+        -- nothing was written: drop the registered footprint, it must
+        -- not block future sites
+        discard_box(job.box)
+        minetest.log("warning", "[nativevillages] could not place "
+            .. job.name .. " at (" .. job.pos.x .. "," .. job.pos.y .. ","
+            .. job.pos.z .. "), footprint discarded")
+    end
+end
+
+-- VERTICAL CONTAINMENT. When the footprint extends above or below the
+-- Y window [fy1, fy2] of the fragment that accepted it, the missing
+-- mapblocks must be generated FIRST: place_schematic happily writes
+-- into ungenerated mapblocks, and the mapgen later overwrites them,
+-- leaving a partially drawn building. emerge_area generates (or loads)
+-- the whole 3D box of the footprint, and the placement only runs from
+-- the final emerge callback, on committed map data. The extra
+-- on_generated calls the emerge triggers for the freshly generated
+-- mapblocks are harmless: their Y window sits above or below the
+-- surface, so their site draws die on the ground test, and the
+-- anti-collision registry rejects the rest
+local function dispatch_job(job, fy1, fy2)
+    local box = job.box
+    if box.y1 < fy1 or box.y2 > fy2 then
+        if debug_placement then
+            minetest.log("action", "[nativevillages] deferring "
+                .. job.name .. " at (" .. job.pos.x .. "," .. job.pos.y
+                .. "," .. job.pos.z .. "): footprint y " .. box.y1
+                .. ".." .. box.y2 .. " spills out of fragment y " .. fy1
+                .. ".." .. fy2 .. ", emerging it first")
+        end
+        minetest.emerge_area(
+            {x = box.x1, y = box.y1, z = box.z1},
+            {x = box.x2, y = box.y2, z = box.z2},
+            function(_, _, remaining)
+                if remaining <= 0 then
+                    run_job(job)
+                end
+            end)
+    else
+        run_job(job)
+    end
+end
+
+-- Queue an accepted site and register its footprint right away: the
+-- later candidates of this chunk are tested against it before anything
+-- is written to the map. Returns false when the padded footprint
+-- overlaps an already placed building. The biome name stored in the job
+-- (multi point elected over the real footprint, anchor only deciding
+-- the ties, see soil_replacement.lua S.elect) lets the deferred
+-- placement adapt the schematic ground to it. ctx carries the stats
+-- table, the queue (nil for the deferred village slots, which place
+-- directly on their emerged data through place_now) and a debug tag
+local function accept_site_ctx(ctx, def, rot, px, pz, y1, w, d, size, biome_name)
+    local box = {
+        x1 = px, y1 = y1, z1 = pz,
+        x2 = px + w - 1, y2 = y1 + size.y - 1, z2 = pz + d - 1,
+        placed = false, -- flipped to true by commit_box, once placed
+    }
+    if site_occupied(box) then
+        ctx.stats.collision = ctx.stats.collision + 1
+        if debug_placement then
+            minetest.log("action", "[nativevillages] site REJECTED "
+                .. def.name .. " at (" .. px .. "," .. y1 .. "," .. pz
+                .. "): collision with a registered footprint"
+                .. (ctx.tag or ""))
+        end
+        return false -- overlaps an already placed footprint
+    end
+    ctx.stats.accepted = ctx.stats.accepted + 1
+    if debug_placement then
+        minetest.log("action", "[nativevillages] site ACCEPTED "
+            .. def.name .. " at (" .. px .. "," .. y1 .. "," .. pz
+            .. ") rot=" .. rot .. " box=(" .. box.x1 .. "," .. box.y1
+            .. "," .. box.z1 .. ")-(" .. box.x2 .. "," .. box.y2
+            .. "," .. box.z2 .. ")" .. (ctx.tag or ""))
+    end
+    local job = {
+        pos = {x = px, y = y1, z = pz},
+        schematic = def.schematic,
+        rot = rot,
+        name = def.name,
+        biome_name = biome_name,
+        tag = ctx.tag or "",
+        box = record_box(box),
+    }
+    if ctx.place_now then
+        dispatch_job(job, ctx.yfloor, ctx.top)
+    else
+        ctx.queue[#ctx.queue + 1] = job
+    end
+    return true
+end
+
+-- One candidate attempt loop, shared by the scattered sites and the
+-- village slots. Draws a building (weighted by fill_ratio, bounded
+-- redraws), tests it around a centre and queues it when the site is
+-- good. ctx fields:
+--   va, data, yfloor, top   voxel view and Y scan window
+--   eminx/eminz/emaxx/emaxz readable XZ window of the view
+--   minp, maxp              fragment (scattered containment)
+--   stats, queue            bookkeeping and deferred queue
+--   rng, defs, weight       PRNG and weighted drawing pool
+--   slot                    nil = scattered site (rotation and centre
+--                           drawn from rng, footprint inside the chunk,
+--                           lone house suppression inside village
+--                           zones), {x, z, rot} = village slot (the
+--                           point is the centre, rotation from the
+--                           plan, footprint may cross the fragment
+--                           borders within the readable window,
+--                           otherwise the whole loop is handed over to
+--                           ctx.defer, and a not flat site spends its
+--                           remaining draws on smaller drawings)
+--   defer                   XZ deferral callback of the village slots
+--   place_now, tag          deferred placement context markers
+local function try_at(ctx)
+    local cx, cz
+    for _ = 1, max_draws_per_site do
+        -- draw a building, weighted by fill_ratio
+        local def
+        local r = ctx.rng:next(0, 999999) / 999999 * ctx.weight
+        local acc = 0
+        for _, d in ipairs(ctx.defs) do
+            acc = acc + d.fill_ratio
+            if r <= acc then
+                def = d
+                break
+            end
+        end
+        if not def then
+            def = ctx.defs[#ctx.defs]
+        end
+
+        -- draw the rotation first: a 90/270 rotation swaps the XZ
+        -- extents, and the flatness test must sample the footprint
+        -- that will actually be placed. A village slot takes the
+        -- rotation of its plan instead
+        local size = schematic_size(def.schematic)
+        local w, d = size.x, size.z
+        local rot
+        if ctx.slot then
+            rot = ctx.slot.rot
+            cx, cz = ctx.slot.x, ctx.slot.z
+        else
+            rot = ctx.rng:next(0, 3) * 90
+        end
+        if rot % 180 ~= 0 then
+            w, d = d, w
+        end
+
+        local px, pz
+        if ctx.slot then
+            -- village slot: the point is the centre of the (rotated)
+            -- footprint; the columns must merely stay readable inside
+            -- the emerged area of the fragment
+            px = cx - math.floor(w / 2)
+            pz = cz - math.floor(d / 2)
+        else
+            -- random centre point, keeping the whole footprint inside
+            -- the current chunk (see the engine design notes above)
+            local x0 = ctx.minp.x + math.floor(w / 2) + 1
+            local x1 = ctx.maxp.x - math.ceil(w / 2) - 1
+            local z0 = ctx.minp.z + math.floor(d / 2) + 1
+            local z1 = ctx.maxp.z - math.ceil(d / 2) - 1
+            if x1 < x0 or z1 < z0 then
+                ctx.stats.too_wide = ctx.stats.too_wide + 1
+                return false -- schematic wider than the chunk, give up
+            end
+            local scx = x0 + ctx.rng:next(0, x1 - x0)
+            local scz = z0 + ctx.rng:next(0, z1 - z0)
+            px = scx - math.floor(w / 2)
+            pz = scz - math.floor(d / 2)
+            -- lone house suppression inside the village zones: the
+            -- surroundings of a village must not constellation with
+            -- isolated houses, the grouped slots play that role there
+            if V and villages_on then
+                local plan = V.plan(math.floor(scx / V.region),
+                    math.floor(scz / V.region))
+                if plan and ctx.rng:next(0, 999999) / 999999
+                    >= scatter_in_village then
+                    return false
+                end
+            end
+            cx, cz = scx, scz
+        end
+
+        -- readability guard: the tests below must READ the columns of
+        -- the footprint. A village slot whose footprint crosses the
+        -- emerged area of the fragment is handed over to the deferred
+        -- path (emerge first); in a deferred context (defer = nil) a
+        -- drawing wider than the readable window is dropped instead.
+        -- A scattered site never reaches this: its footprint already
+        -- fits the chunk, hence the emerged area
+        if px < ctx.eminx or px + w - 1 > ctx.emaxx
+            or pz < ctx.eminz or pz + d - 1 > ctx.emaxz then
+            if ctx.defer then
+                return ctx.defer(ctx) or true
+            end
+            ctx.stats.too_wide = ctx.stats.too_wide + 1
+            return false -- drawing wider than the readable window
+        end
+
+        local ground_set = ground_set_of(def)
+
+        if def.anchor == "water" then
+            -- anchor to the lake bed, like the historical
+            -- decorations: the engine found the place_on node
+            -- (dirt/sand) under the water column and based the
+            -- schematic on it, the y_min/y_max = -0.5 filter
+            -- selecting beds at y = -1 exactly. The centre column
+            -- must be flooded open water of an acceptable biome
+            -- (the historical biomes= filter) above that bed.
+            -- relax_altitude never widens these bands: the lake
+            -- schematics are built for a bed one node under the
+            -- water surface, a deeper bed would drown them.
+            local top_y, top_id = vm_top_node(ctx.va, ctx.data,
+                ctx.yfloor, cx, cz, ctx.top)
+            if not top_y or not water_ids[top_id] then
+                ctx.stats.draw_water = ctx.stats.draw_water + 1
+            else
+                local bed_y = vm_ground_height(ctx.va, ctx.data,
+                    ctx.yfloor, cx, cz, ground_set, true, top_y)
+                local bed_ok, bed_biome
+                if bed_y then
+                    bed_ok, bed_biome = biome_ok(cx, bed_y, cz, def.biome_set)
+                end
+                if not bed_y then
+                    ctx.stats.draw_ground = ctx.stats.draw_ground + 1
+                elseif not bed_ok then
+                    ctx.stats.draw_biome = ctx.stats.draw_biome + 1
+                else
+                    local c = bed_y + 0.5
+                    if c >= def.y_min and c <= def.y_max then
+                        -- 3x3 biome sampling of the real (rotated)
+                        -- footprint at the constant bed height: no
+                        -- extra column scan, a lake bed has no
+                        -- vertical biome boundary to care about. A
+                        -- grid point fallen on an emerged shore
+                        -- votes a land biome, filtered out at
+                        -- election time below
+                        local votes = {}
+                        for i = 0, 2 do
+                            for j = 0, 2 do
+                                local sx = px + math.floor((w - 1) * i / 2)
+                                local sz = pz + math.floor((d - 1) * j / 2)
+                                votes[#votes + 1] = biome_name_at(sx, bed_y, sz)
+                            end
+                        end
+                        -- votes filtered on the accepted biome set:
+                        -- a lake building can only elect a bed biome
+                        -- (sand/dirt node_top), never a land one
+                        -- (grass under water); ties and fallback go
+                        -- to the bed anchor
+                        local elected = Soil.elect(votes, bed_biome, def.biome_set)
+                        if debug_placement and elected ~= bed_biome then
+                            minetest.log("action", "[nativevillages] soil biome "
+                                .. "elected " .. tostring(elected) .. " over anchor "
+                                .. tostring(bed_biome) .. " for " .. def.name)
+                        end
+                        -- cheap AABB anti-collision test, then
+                        -- queue the accepted footprint; the job
+                        -- carries the ELECTED biome, the bed anchor
+                        -- biome only decided the ties
+                        return accept_site_ctx(ctx, def, rot, px, pz,
+                            bed_y + def.offset, w, d, size, elected)
+                    end
+                    ctx.stats.draw_alt = ctx.stats.draw_alt + 1
+                end
+            end
+            -- wrong site for this drawing, try another drawing
+        else
+            -- ground anchored: the centre column must carry an
+            -- acceptable ground node of an acceptable biome inside
+            -- the altitude band. y_min/y_max are compared at the
+            -- centre of the node (y + 0.5), the engine decoration
+            -- convention that makes the historical x.5 bounds
+            -- select whole node rows. relax_altitude widens the
+            -- band of the drawing (see the setting block above).
+            -- Swamp anchored drawings additionally skip a SHALLOW
+            -- water column: a real swamp is flooded, the first
+            -- non air node of its columns is water, so a strict
+            -- ground scan rejects every site of every real swamp
+            -- (the run F logs showed ~450/512 draws dying on the
+            -- ground test inside a genuine swamp biome). The 30
+            -- node foundation then emerges from the water like a
+            -- stilt house. The 0.5..10.5 altitude band still
+            -- rejects the beds of deep lakes.
+            local swampy = def.categories.swamp == true
+            local gy = vm_ground_height(ctx.va, ctx.data, ctx.yfloor,
+                cx, cz, ground_set, swampy, ctx.top)
+            -- surface reference of a swampy site: the FIRST non air
+            -- node (water surface or dry mud island top). It is the
+            -- flatness reference AND the anchor: anchoring on the
+            -- bed would leave the ground floor under the water
+            local surface_y = swampy and vm_top_node(ctx.va, ctx.data,
+                ctx.yfloor, cx, cz, ctx.top) or gy
+            local ground_ok, ground_biome
+            if gy then
+                ground_ok, ground_biome = biome_ok(cx, gy, cz, def.biome_set)
+            end
+            if not gy then
+                ctx.stats.draw_ground = ctx.stats.draw_ground + 1
+            elseif not ground_ok then
+                ctx.stats.draw_biome = ctx.stats.draw_biome + 1
+            else
+                -- swampy sites need SHALLOW water: more than
+                -- SWAMP_MAX_DEPTH nodes between the surface and
+                -- the bed is a lake, not a swamp, and a 30 node
+                -- foundation anchored there would build a dirt
+                -- tower from the abyss
+                if swampy and surface_y - gy > 3 then
+                    ctx.stats.draw_water = ctx.stats.draw_water + 1
+                else
+                    -- the altitude band is checked on the anchoring
+                    -- reference: the surface for a swampy site (the
+                    -- water surface of a flooded swamp sits around y=1
+                    -- while its bed lies at -2..0 and would fall below
+                    -- the 0.5 floor), the ground node otherwise
+                    local c = (swampy and surface_y or gy) + 0.5
+                    local y_lo = def.y_min
+                    local y_hi = def.y_max
+                    if relax_altitude then
+                        y_lo = y_lo - RELAX_DOWN
+                        y_hi = y_hi + RELAX_UP
+                    end
+                    if c >= y_lo and c <= y_hi then
+                        -- flatness test over the whole footprint (3x3
+                        -- grid: corners, edge midpoints, centre).
+                        -- Swampy drawings compare the FIRST non air
+                        -- node of each column (the water surface of a
+                        -- flooded swamp or the top of a mud island):
+                        -- the bed of a real swamp is a chaotic mix of
+                        -- pools, mud humps and mangrove trunks, and
+                        -- comparing bed heights rejected every site
+                        -- (run H logs), while the water surface is
+                        -- what a stilt house actually stands over
+                        local flat = true
+                        for i = 0, 2 do
+                            for j = 0, 2 do
+                                local sx = px + math.floor((w - 1) * i / 2)
+                                local sz = pz + math.floor((d - 1) * j / 2)
+                                local sy
+                                if swampy then
+                                    sy = vm_top_node(ctx.va, ctx.data,
+                                        ctx.yfloor, sx, sz, ctx.top)
+                                else
+                                    sy = vm_ground_height(ctx.va, ctx.data,
+                                        ctx.yfloor, sx, sz, ground_set, false,
+                                        ctx.top)
+                                end
+                                if not sy or math.abs(sy - surface_y) > max_ground_diff then
+                                    flat = false -- too steep, cliff...
+                                    break
+                                end
+                            end
+                            if not flat then
+                                break
+                            end
+                        end
+                        if flat then
+                            -- 3x3 biome sampling on the same grid
+                            -- positions as the flatness test above,
+                            -- measured at the real surface of each
+                            -- point (the biome also varies vertically);
+                            -- swampy sites sample the water or island
+                            -- surface, their flatness reference. Runs
+                            -- only on flat accepted candidates: a
+                            -- rejected site pays no vote
+                            local votes = {}
+                            for i = 0, 2 do
+                                for j = 0, 2 do
+                                    local sx = px + math.floor((w - 1) * i / 2)
+                                    local sz = pz + math.floor((d - 1) * j / 2)
+                                    local sy
+                                    if swampy then
+                                        sy = vm_top_node(ctx.va, ctx.data,
+                                            ctx.yfloor, sx, sz, ctx.top)
+                                    else
+                                        sy = vm_ground_height(ctx.va, ctx.data,
+                                            ctx.yfloor, sx, sz, ground_set,
+                                            false, ctx.top)
+                                    end
+                                    votes[#votes + 1] = sy and biome_name_at(sx, sy, sz) or nil
+                                end
+                            end
+                            -- open vote: the ground follows the biome
+                            -- dominating the visible terrain, even
+                            -- outside the categories of the building
+                            -- (e.g. a grassland house mostly standing
+                            -- on desert ground gets desert sand); ties
+                            -- and fallback go to the ground anchor
+                            local elected = Soil.elect(votes, ground_biome, nil)
+                            if debug_placement and elected ~= ground_biome then
+                                minetest.log("action", "[nativevillages] soil biome "
+                                    .. "elected " .. tostring(elected) .. " over anchor "
+                                    .. tostring(ground_biome) .. " for " .. def.name)
+                            end
+                            -- cheap AABB anti-collision test, then
+                            -- queue the accepted footprint, anchored on
+                            -- the surface (water surface of a flooded
+                            -- swamp, top of a dry mud island); the job
+                            -- carries the ELECTED biome, the anchor
+                            -- biome only decided the ties
+                            return accept_site_ctx(ctx, def, rot, px, pz,
+                                surface_y + def.offset, w, d, size, elected)
+                        end
+                        ctx.stats.not_flat = ctx.stats.not_flat + 1
+                        if debug_placement then
+                            minetest.log("action", "[nativevillages] site REJECTED "
+                                .. def.name .. " at (" .. px .. "," .. gy .. ","
+                                .. pz .. "): ground not flat enough (diff > "
+                                .. max_ground_diff .. ")")
+                        end
+                        if not ctx.slot then
+                            -- scattered site: right drawing, bad ground
+                            -- shape or already occupied site: reject it,
+                            -- do not redraw another building on it
+                            return false
+                        end
+                        -- village slot: the position is fixed, but a
+                        -- smaller drawing may still fit the slope, so
+                        -- the remaining bounded draws are spent instead
+                        -- of dropping the slot outright
+                    end
+                    ctx.stats.draw_alt = ctx.stats.draw_alt + 1
+                end
+            end
+            -- wrong biome, ground or altitude for this drawing,
+            -- try another drawing
+        end
+    end
+    -- none of the bounded redraws matched this site (biome, ground
+    -- node or altitude rejected them all)
+    ctx.stats.no_match = ctx.stats.no_match + 1
+    return false
+end
+
 -- Engine: chunk by chunk alternative to the mapgen decorations.
 -- Design notes:
 --   * the VoxelManip of the mapgen object is only READ (column scans,
@@ -544,6 +1124,12 @@ if use_new then
     minetest.register_on_generated(function(minp, maxp, blockseed)
         if not ids_ready then
             init_ids()
+        end
+
+        -- bind the village layer once available (village_zones.lua
+        -- loads after this file, see init.lua)
+        if V == nil then
+            V = nativevillages.village
         end
         if #registry == 0 or total_weight <= 0 then
             return
@@ -571,8 +1157,11 @@ if use_new then
         if tries > max_tries_per_chunk then
             tries = max_tries_per_chunk
         end
+        -- 0 scattered tries must NOT return early: the village slots
+        -- below still have to be processed (a low placement_density
+        -- must not empty the villages)
         if tries < 1 then
-            return
+            tries = 0
         end
 
         -- Per chunk counters (debug_placement): where the tried sites
@@ -600,380 +1189,131 @@ if use_new then
         local emin, emax = vm:get_emerged_area()
         local va = VoxelArea:new({MinEdge = emin, MaxEdge = emax})
 
-        -- Height and content id of the first non-air node of a column,
-        -- scanning down from top (nil when the whole column is air)
-        local function top_node(x, z, top)
-            for y = top, minp.y, -1 do
-                local id = data[va:index(x, y, z)]
-                if id ~= air_id and id ~= ignore_id then
-                    return y, id
-                end
-            end
-            return nil
-        end
-
-        -- Ground node height of a column, or nil when the site must be
-        -- rejected: the first non-air node has to be an acceptable ground
-        -- node (the historical place_on contract: a tree, a building or a
-        -- wrong surface node on top rejects the site). Water anchored
-        -- schematics skip the liquid column down to the lake bed instead.
-        local function ground_height(x, z, ground_set, skip_liquids, top)
-            for y = top, minp.y, -1 do
-                local id = data[va:index(x, y, z)]
-                if id ~= air_id and id ~= ignore_id then
-                    if skip_liquids and water_ids[id] then
-                        -- keep scanning through the water column
-                    elseif ground_set[id] then
-                        return y
-                    else
-                        return nil
-                    end
-                end
-            end
-            return nil
-        end
-
-        -- Name of the biome at a position, nil when the engine cannot
-        -- answer (same engine calls as the previous inline check)
-        local function biome_name_at(x, y, z)
-            local bdata = minetest.get_biome_data({x = x, y = y, z = z})
-            if not bdata then
-                return nil
-            end
-            return minetest.get_biome_name(bdata.biome)
-        end
-
-        -- Biome check against the exact biome name set of the building
-        -- (the same list the historical decorations passed as biomes=).
-        -- Also returns the accepted biome name so the site can adapt its
-        -- schematic ground to it (see soil_replacement.lua)
-        local function biome_ok(x, y, z, biome_set)
-            local name = biome_name_at(x, y, z)
-            if name == nil or not biome_set[name] then
-                return false, nil
-            end
-            return true, name
-        end
-
         -- Deferred placements of this chunk: executed on the next server
         -- step, once the generated chunk has been committed to the map
         local queue = {}
 
-        -- Queue an accepted site and register its footprint right away:
-        -- the later candidates of this chunk are tested against it
-        -- before anything is written to the map. Returns false when the
-        -- padded footprint overlaps an already placed building. The
-        -- biome name stored in the job (multi point elected over the
-        -- real footprint, anchor only deciding the ties, see
-        -- soil_replacement.lua S.elect) lets the deferred placement
-        -- adapt the schematic ground to it.
-        local function accept_site(def, rot, px, pz, y1, w, d, size, biome_name)
-            local box = {
-                x1 = px, y1 = y1, z1 = pz,
-                x2 = px + w - 1, y2 = y1 + size.y - 1, z2 = pz + d - 1,
-                placed = false, -- flipped to true by commit_box, once placed
-            }
-            if site_occupied(box) then
-                stats.collision = stats.collision + 1
-                if debug_placement then
-                    minetest.log("action", "[nativevillages] site REJECTED "
-                        .. def.name .. " at (" .. px .. "," .. y1 .. "," .. pz
-                        .. "): collision with a registered footprint")
-                end
-                return false -- overlaps an already placed footprint
-            end
-            stats.accepted = stats.accepted + 1
+        -- Village slot bookkeeping of this fragment (debug_placement
+        -- recap): hosted counts the slots whose POINT belongs to this
+        -- fragment, tried the ones actually offered to the engine
+        local vstats = {
+            hosted = 0, tried = 0, accepted = 0, not_flat = 0,
+            collision = 0, no_match = 0, too_wide = 0, deferred = 0,
+            draw_ground = 0, draw_biome = 0, draw_alt = 0, draw_water = 0,
+        }
+
+        -- XZ deferral of a village slot: the footprint of the drawn
+        -- building crosses outside the emerged area of the fragment,
+        -- so its columns cannot be read yet. The whole attempt loop
+        -- is resumed from the emerge callback, on a manual VoxelManip
+        -- read of a generous window around the slot (the redrawn
+        -- drawings must almost always fit it), with place_now: an
+        -- accepted slot is placed right there on committed data (the
+        -- vertical containment of dispatch_job still applies). This
+        -- is the XZ counterpart of the vertical containment of the
+        -- deferred queue below
+        local function defer_slot(ctx)
+            ctx.stats.deferred = ctx.stats.deferred + 1
+            local slot = ctx.slot
+            local m = 24
+            local p1 = {x = slot.x - m, y = emin.y, z = slot.z - m}
+            local p2 = {x = slot.x + m, y = emax.y, z = slot.z + m}
             if debug_placement then
-                minetest.log("action", "[nativevillages] site ACCEPTED "
-                    .. def.name .. " at (" .. px .. "," .. y1 .. "," .. pz
-                    .. ") rot=" .. rot .. " box=(" .. box.x1 .. "," .. box.y1
-                    .. "," .. box.z1 .. ")-(" .. box.x2 .. "," .. box.y2
-                    .. "," .. box.z2 .. ")")
+                minetest.log("action", "[nativevillages] deferring village "
+                    .. "slot at (" .. slot.x .. "," .. slot.z
+                    .. "): footprint outside the fragment emerged area, "
+                    .. "emerging it first")
             end
-            queue[#queue + 1] = {
-                pos = {x = px, y = y1, z = pz},
-                schematic = def.schematic,
-                rot = rot,
-                name = def.name,
-                biome_name = biome_name,
-                box = record_box(box),
-            }
-            return true
+            minetest.emerge_area(p1, p2, function(_, _, remaining)
+                if remaining > 0 then
+                    return
+                end
+                local vm2 = minetest.get_voxel_manip()
+                local e1, e2 = vm2:read_from_map(p1, p2)
+                if not e1 then
+                    return
+                end
+                local ctx2 = {
+                    va = VoxelArea:new({MinEdge = e1, MaxEdge = e2}),
+                    data = vm2:get_data(),
+                    yfloor = e1.y, top = e2.y,
+                    eminx = e1.x, eminz = e1.z, emaxx = e2.x, emaxz = e2.z,
+                    stats = ctx.stats, queue = nil, place_now = true,
+                    rng = ctx.rng, defs = ctx.defs, weight = ctx.weight,
+                    slot = slot, defer = nil, tag = ctx.tag,
+                }
+                try_at(ctx2)
+            end)
+            return true -- handled: the slot must not be retried here
         end
 
-        -- One candidate site: queues the placement when the site is good
-        local function try_site()
-            -- A single global weighted draw would waste most tries on
-            -- buildings of foreign biomes (a jungle chunk can only ever
-            -- place one of the 6 jungle drawings out of the 42 of the
-            -- registry) and starve the effective density. Redraw, a
-            -- bounded number of times, until the drawn building matches
-            -- the biome, ground and altitude of its centre column.
-            for _ = 1, max_draws_per_site do
-                -- draw a building, weighted by fill_ratio
-                local def
-                local r = prng:next(0, 999999) / 999999 * total_weight
-                local acc = 0
-                for _, d in ipairs(registry) do
-                    acc = acc + d.fill_ratio
-                    if r <= acc then
-                        def = d
-                        break
-                    end
-                end
-                if not def then
-                    def = registry[#registry]
-                end
-
-                -- draw the rotation first: a 90/270 rotation swaps the XZ
-                -- extents, and the flatness test must sample the footprint
-                -- that will actually be placed
-                local size = schematic_size(def.schematic)
-                local w, d = size.x, size.z
-                local rot = prng:next(0, 3) * 90
-                if rot % 180 ~= 0 then
-                    w, d = d, w
-                end
-
-                -- random centre point, keeping the whole footprint inside
-                -- the current chunk (see the engine design notes above)
-                local x0 = minp.x + math.floor(w / 2) + 1
-                local x1 = maxp.x - math.ceil(w / 2) - 1
-                local z0 = minp.z + math.floor(d / 2) + 1
-                local z1 = maxp.z - math.ceil(d / 2) - 1
-                if x1 < x0 or z1 < z0 then
-                    stats.too_wide = stats.too_wide + 1
-                    return false -- schematic wider than the chunk, give up
-                end
-                local cx = x0 + prng:next(0, x1 - x0)
-                local cz = z0 + prng:next(0, z1 - z0)
-
-                -- north-west corner of the (rotated) footprint
-                local px = cx - math.floor(w / 2)
-                local pz = cz - math.floor(d / 2)
-
-                local ground_set = ground_set_of(def)
-
-                if def.anchor == "water" then
-                    -- anchor to the lake bed, like the historical
-                    -- decorations: the engine found the place_on node
-                    -- (dirt/sand) under the water column and based the
-                    -- schematic on it, the y_min/y_max = -0.5 filter
-                    -- selecting beds at y = -1 exactly. The centre column
-                    -- must be flooded open water of an acceptable biome
-                    -- (the historical biomes= filter) above that bed.
-                    -- relax_altitude never widens these bands: the lake
-                    -- schematics are built for a bed one node under the
-                    -- water surface, a deeper bed would drown them.
-                    local top_y, top_id = top_node(cx, cz, maxp.y)
-                    if not top_y or not water_ids[top_id] then
-                        stats.draw_water = stats.draw_water + 1
-                    else
-                        local bed_y = ground_height(cx, cz, ground_set, true, top_y)
-                        local bed_ok, bed_biome
-                        if bed_y then
-                            bed_ok, bed_biome = biome_ok(cx, bed_y, cz, def.biome_set)
-                        end
-                        if not bed_y then
-                            stats.draw_ground = stats.draw_ground + 1
-                        elseif not bed_ok then
-                            stats.draw_biome = stats.draw_biome + 1
-                        else
-                            local c = bed_y + 0.5
-                            if c >= def.y_min and c <= def.y_max then
-                                -- 3x3 biome sampling of the real (rotated)
-                                -- footprint at the constant bed height: no
-                                -- extra column scan, a lake bed has no
-                                -- vertical biome boundary to care about. A
-                                -- grid point fallen on an emerged shore
-                                -- votes a land biome, filtered out at
-                                -- election time below
-                                local votes = {}
-                                for i = 0, 2 do
-                                    for j = 0, 2 do
-                                        local sx = px + math.floor((w - 1) * i / 2)
-                                        local sz = pz + math.floor((d - 1) * j / 2)
-                                        votes[#votes + 1] = biome_name_at(sx, bed_y, sz)
-                                    end
-                                end
-                                -- votes filtered on the accepted biome set:
-                                -- a lake building can only elect a bed biome
-                                -- (sand/dirt node_top), never a land one
-                                -- (grass under water); ties and fallback go
-                                -- to the bed anchor
-                                local elected = Soil.elect(votes, bed_biome, def.biome_set)
-                                if debug_placement and elected ~= bed_biome then
-                                    minetest.log("action", "[nativevillages] soil biome "
-                                        .. "elected " .. tostring(elected) .. " over anchor "
-                                        .. tostring(bed_biome) .. " for " .. def.name)
-                                end
-                                -- cheap AABB anti-collision test, then
-                                -- queue the accepted footprint; the job
-                                -- carries the ELECTED biome, the bed anchor
-                                -- biome only decided the ties
-                                return accept_site(def, rot, px, pz,
-                                    bed_y + def.offset, w, d, size, elected)
-                            end
-                            stats.draw_alt = stats.draw_alt + 1
-                        end
-                    end
-                    -- wrong site for this drawing, try another drawing
-                else
-                    -- ground anchored: the centre column must carry an
-                    -- acceptable ground node of an acceptable biome inside
-                    -- the altitude band. y_min/y_max are compared at the
-                    -- centre of the node (y + 0.5), the engine decoration
-                    -- convention that makes the historical x.5 bounds
-                    -- select whole node rows. relax_altitude widens the
-                    -- band of the drawing (see the setting block above).
-                    -- Swamp anchored drawings additionally skip a SHALLOW
-                    -- water column: a real swamp is flooded, the first
-                    -- non air node of its columns is water, so a strict
-                    -- ground scan rejects every site of every real swamp
-                    -- (the run F logs showed ~450/512 draws dying on the
-                    -- ground test inside a genuine swamp biome). The 30
-                    -- node foundation then emerges from the water like a
-                    -- stilt house. The 0.5..10.5 altitude band still
-                    -- rejects the beds of deep lakes.
-                    local swampy = def.categories.swamp == true
-                    local gy = ground_height(cx, cz, ground_set, swampy, maxp.y)
-                    -- surface reference of a swampy site: the FIRST non air
-                    -- node (water surface or dry mud island top). It is the
-                    -- flatness reference AND the anchor: anchoring on the
-                    -- bed would leave the ground floor under the water
-                    local surface_y = swampy and top_node(cx, cz, maxp.y) or gy
-                    local ground_ok, ground_biome
-                    if gy then
-                        ground_ok, ground_biome = biome_ok(cx, gy, cz, def.biome_set)
-                    end
-                    if not gy then
-                        stats.draw_ground = stats.draw_ground + 1
-                    elseif not ground_ok then
-                        stats.draw_biome = stats.draw_biome + 1
-                    else
-                        -- swampy sites need SHALLOW water: more than
-                        -- SWAMP_MAX_DEPTH nodes between the surface and
-                        -- the bed is a lake, not a swamp, and a 30 node
-                        -- foundation anchored there would build a dirt
-                        -- tower from the abyss
-                        if swampy and surface_y - gy > 3 then
-                            stats.draw_water = stats.draw_water + 1
-                        else
-                        -- the altitude band is checked on the anchoring
-                        -- reference: the surface for a swampy site (the
-                        -- water surface of a flooded swamp sits around y=1
-                        -- while its bed lies at -2..0 and would fall below
-                        -- the 0.5 floor), the ground node otherwise
-                        local c = (swampy and surface_y or gy) + 0.5
-                        local y_lo = def.y_min
-                        local y_hi = def.y_max
-                        if relax_altitude then
-                            y_lo = y_lo - RELAX_DOWN
-                            y_hi = y_hi + RELAX_UP
-                        end
-                        if c >= y_lo and c <= y_hi then
-                            -- flatness test over the whole footprint (3x3
-                            -- grid: corners, edge midpoints, centre).
-                            -- Swampy drawings compare the FIRST non air
-                            -- node of each column (the water surface of a
-                            -- flooded swamp or the top of a mud island):
-                            -- the bed of a real swamp is a chaotic mix of
-                            -- pools, mud humps and mangrove trunks, and
-                            -- comparing bed heights rejected every site
-                            -- (run H logs), while the water surface is
-                            -- what a stilt house actually stands over
-                            local flat = true
-                            for i = 0, 2 do
-                                for j = 0, 2 do
-                                    local sx = px + math.floor((w - 1) * i / 2)
-                                    local sz = pz + math.floor((d - 1) * j / 2)
-                                    local sy
-                                    if swampy then
-                                        sy = top_node(sx, sz, maxp.y)
-                                    else
-                                        sy = ground_height(sx, sz, ground_set, false, maxp.y)
-                                    end
-                                    if not sy or math.abs(sy - surface_y) > max_ground_diff then
-                                        flat = false -- too steep, cliff...
-                                        break
-                                    end
-                                end
-                                if not flat then
-                                    break
-                                end
-                            end
-                            if flat then
-                                -- 3x3 biome sampling on the same grid
-                                -- positions as the flatness test above,
-                                -- measured at the real surface of each
-                                -- point (the biome also varies vertically);
-                                -- swampy sites sample the water or island
-                                -- surface, their flatness reference. Runs
-                                -- only on flat accepted candidates: a
-                                -- rejected site pays no vote
-                                local votes = {}
-                                for i = 0, 2 do
-                                    for j = 0, 2 do
-                                        local sx = px + math.floor((w - 1) * i / 2)
-                                        local sz = pz + math.floor((d - 1) * j / 2)
-                                        local sy
-                                        if swampy then
-                                            sy = top_node(sx, sz, maxp.y)
-                                        else
-                                            sy = ground_height(sx, sz, ground_set, false, maxp.y)
-                                        end
-                                        votes[#votes + 1] = sy and biome_name_at(sx, sy, sz) or nil
-                                    end
-                                end
-                                -- open vote: the ground follows the biome
-                                -- dominating the visible terrain, even
-                                -- outside the categories of the building
-                                -- (e.g. a grassland house mostly standing
-                                -- on desert ground gets desert sand); ties
-                                -- and fallback go to the ground anchor
-                                local elected = Soil.elect(votes, ground_biome, nil)
-                                if debug_placement and elected ~= ground_biome then
-                                    minetest.log("action", "[nativevillages] soil biome "
-                                        .. "elected " .. tostring(elected) .. " over anchor "
-                                        .. tostring(ground_biome) .. " for " .. def.name)
-                                end
-                                -- cheap AABB anti-collision test, then
-                                -- queue the accepted footprint, anchored on
-                                -- the surface (water surface of a flooded
-                                -- swamp, top of a dry mud island); the job
-                                -- carries the ELECTED biome, the anchor
-                                -- biome only decided the ties
-                                return accept_site(def, rot, px, pz,
-                                    surface_y + def.offset, w, d, size, elected)
-                            end
-                            stats.not_flat = stats.not_flat + 1
-                            if debug_placement then
-                                minetest.log("action", "[nativevillages] site REJECTED "
-                                    .. def.name .. " at (" .. px .. "," .. gy .. ","
-                                    .. pz .. "): ground not flat enough (diff > "
-                                    .. max_ground_diff .. ")")
-                            end
-                            -- right drawing, bad ground shape or already
-                            -- occupied site: reject it, do not redraw
-                            -- another building on it
-                            return false
-                        end
-                        stats.draw_alt = stats.draw_alt + 1
-                        end
-                    end
-                    -- wrong biome, ground or altitude for this drawing,
-                    -- try another drawing
-                end
-            end
-            -- none of the bounded redraws matched this site (biome,
-            -- ground node or altitude rejected them all)
-            stats.no_match = stats.no_match + 1
-            return false
-        end
+        -- Scattered candidate sites, unchanged behaviour: the drawings,
+        -- rotations and centres all come from the chunk seeded PRNG
+        local scatter_ctx = {
+            va = va, data = data, yfloor = minp.y, top = maxp.y,
+            eminx = emin.x, eminz = emin.z, emaxx = emax.x, emaxz = emax.z,
+            minp = minp, maxp = maxp,
+            stats = stats, queue = queue, rng = prng,
+            defs = registry, weight = total_weight, slot = nil,
+        }
 
         for _ = 1, tries do
-            try_site()
+            try_at(scatter_ctx)
         end
+
+        -- Village slots: every fragment processes the slots of the
+        -- crossing village plans whose POINT it hosts (one host per
+        -- slot, whatever the chunk generation order). The drawing of a
+        -- slot is elected by the REAL ground of the slot through the
+        -- very tests above, from a PRNG derived from the village plan
+        -- alone (PcgRandom(plan.seed, plan.seq + slot index)), so a
+        -- village is reproducible from its cell whatever fragment
+        -- hosts its slots and whatever their order
+        if V and villages_on and V.enabled then
+            local civic_defs, civic_total = civic_registry()
+            for _, cell in ipairs(V.cells_overlapping(minp, maxp)) do
+                local plan = V.plan(cell.cx, cell.cz)
+                if plan then
+                    if debug_placement then
+                        minetest.log("action", "[nativevillages] village zone ("
+                            .. cell.cx .. "," .. cell.cz .. ") core=(" .. plan.nx
+                            .. "," .. plan.nz .. ") slots=" .. #plan.slots
+                            .. (plan.near_path and " near_path" or ""))
+                    end
+                    for i, slot in ipairs(plan.slots) do
+                        if slot.x >= minp.x and slot.x <= maxp.x
+                            and slot.z >= minp.z and slot.z <= maxp.z then
+                            vstats.hosted = vstats.hosted + 1
+                            vstats.tried = vstats.tried + 1
+                            local srng = PcgRandom(plan.seed, plan.seq + i)
+                            local function mkctx(defs, weight)
+                                return {
+                                    va = va, data = data,
+                                    yfloor = emin.y, top = emax.y,
+                                    eminx = emin.x, eminz = emin.z,
+                                    emaxx = emax.x, emaxz = emax.z,
+                                    stats = vstats, queue = queue,
+                                    rng = srng, defs = defs, weight = weight,
+                                    slot = slot, tag = " (village slot)",
+                                    defer = defer_slot,
+                                }
+                            end
+                            -- civic preference of the core slots: wells,
+                            -- markets, ponds... are tried first, housing
+                            -- stays the fallback of the same slot
+                            local done = false
+                            if slot.civic and civic_total > 0 then
+                                done = try_at(mkctx(civic_defs, civic_total))
+                            end
+                            if not done then
+                                try_at(mkctx(registry, total_weight))
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
 
         -- One recap line per generated chunk (debug_placement) so the
         -- effect of the density setting is directly readable in
@@ -1004,83 +1344,30 @@ if use_new then
                 .. " open_water=" .. stats.draw_water)
         end
 
+        if debug_placement then
+            minetest.log("action", "[nativevillages] chunk (" .. minp.x .. ","
+                .. minp.z .. ") village slots: hosted=" .. vstats.hosted
+                .. " tried=" .. vstats.tried
+                .. " accepted=" .. vstats.accepted
+                .. " | slot rejections: no_drawing=" .. vstats.no_match
+                .. " not_flat=" .. vstats.not_flat
+                .. " collision=" .. vstats.collision
+                .. " too_wide=" .. vstats.too_wide
+                .. " deferred=" .. vstats.deferred
+                .. " | failed draws: ground=" .. vstats.draw_ground
+                .. " biome=" .. vstats.draw_biome
+                .. " altitude=" .. vstats.draw_alt
+                .. " open_water=" .. vstats.draw_water)
+        end
+
+        -- Deferred placements of this chunk: executed on the next server
+        -- step, once the generated chunk has been committed to the map.
+        -- run_job / dispatch_job are module level, shared with the
+        -- deferred village slots placed by defer_slot
         if #queue > 0 then
             minetest.after(0, function()
                 for _, job in ipairs(queue) do
-                    -- Real placement of one accepted job. Ground
-                    -- adaptation table of the elected biome, applied by
-                    -- the engine while the .mts is decoded (nil keeps
-                    -- the schematic ground untouched, the historical
-                    -- behaviour)
-                    local function place_job()
-                        local repl = Soil.replacement_for(job.biome_name)
-                        local ok = minetest.place_schematic(job.pos,
-                            job.schematic, tostring(job.rot), repl, true)
-                        if ok then
-                            -- the footprint is really on the map, persist it
-                            commit_box(job.box)
-                            minetest.log("action", "[nativevillages] placed "
-                                .. job.name .. " at (" .. job.pos.x .. ","
-                                .. job.pos.y .. "," .. job.pos.z
-                                .. ") rot=" .. job.rot)
-                            if debug_placement and repl then
-                                minetest.log("action", "[nativevillages] soil adapted for "
-                                    .. job.name .. " in biome " .. job.biome_name)
-                            end
-                            -- deterministic population of the placed building
-                            -- (beds, native trigger nodes, anvils): purely
-                            -- additive, silent no-op when the
-                            -- nativevillages.deterministic_spawn setting is
-                            -- disabled or the building category is unknown
-                            local Spawn = nativevillages.spawn
-                            if Spawn and Spawn.populate then
-                                pcall(Spawn.populate, job)
-                            end
-                        else
-                            -- nothing was written: drop the registered
-                            -- footprint, it must not block future sites
-                            discard_box(job.box)
-                            minetest.log("warning", "[nativevillages] could not place "
-                                .. job.name .. " at (" .. job.pos.x .. "," .. job.pos.y .. ","
-                                .. job.pos.z .. "), footprint discarded")
-                        end
-                    end
-
-                    -- VERTICAL CONTAINMENT. When the footprint extends
-                    -- above or below the fragment the callback reports,
-                    -- the missing mapblocks must be generated FIRST:
-                    -- place_schematic happily writes into ungenerated
-                    -- mapblocks, and the mapgen later overwrites them,
-                    -- leaving a partially drawn building. emerge_area
-                    -- generates (or loads) the whole 3D box of the
-                    -- footprint, and the placement only runs from the
-                    -- final emerge callback, on committed map data.
-                    -- The extra on_generated calls the emerge triggers
-                    -- for the freshly generated mapblocks are harmless:
-                    -- their Y window sits above or below the surface,
-                    -- so their site draws die on the ground test, and
-                    -- the anti-collision registry rejects the rest
-                    local box = job.box
-                    if box.y1 < minp.y or box.y2 > maxp.y then
-                        if debug_placement then
-                            minetest.log("action", "[nativevillages] deferring "
-                                .. job.name .. " at (" .. job.pos.x .. ","
-                                .. job.pos.y .. "," .. job.pos.z .. "): footprint y "
-                                .. box.y1 .. ".." .. box.y2
-                                .. " spills out of fragment y " .. minp.y
-                                .. ".." .. maxp.y .. ", emerging it first")
-                        end
-                        minetest.emerge_area(
-                            {x = box.x1, y = box.y1, z = box.z1},
-                            {x = box.x2, y = box.y2, z = box.z2},
-                            function(_, _, remaining)
-                                if remaining <= 0 then
-                                    place_job()
-                                end
-                            end)
-                    else
-                        place_job()
-                    end
+                    dispatch_job(job, minp.y, maxp.y)
                 end
             end)
         end

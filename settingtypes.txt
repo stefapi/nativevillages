@@ -99,3 +99,99 @@ nativevillages.adapt_soil (Native Villages adapt building soil to biome) bool tr
 # désactiver pour ne compter que sur le canal statistique
 # (comportement historique)
 nativevillages.deterministic_spawn (Native Villages deterministic building population) bool true
+
+# If enabled, buildings are additionally grouped into villages: deterministic
+# village zones (a coarse grid, see village_region) elect a core point and
+# offer the EXISTING individual buildings grouped around it, each site still
+# passing the ground/biome/altitude/flatness tests, so a village follows the
+# topography (a ravine simply leaves a hole in it). Disable to keep only the
+# scattered placement of the engine.
+# Si activé, les bâtiments sont en plus groupés en villages : des zones de
+# village déterministes (grille grossière, voir village_region) élisent un
+# noyau et proposent les bâtiments individuels EXISTANTS groupés autour, chaque
+# site passant toujours les tests de sol/biome/altitude/planéité, si bien que
+# le village suit la topographie (un ravin y laisse simplement un trou).
+# Désactiver pour ne conserver que le placement dispersé du moteur.
+nativevillages.use_villages (Native Villages village grouping) bool true
+
+# Side in nodes of the square village zone grid. One zone out of 1/village_
+# chance carries a village; the expected distance to the nearest village is
+# about 0.5 * region / sqrt(chance) (~900 nodes with the defaults). Changing
+# the village settings changes the drawn plans: previously generated chunks
+# keep their buildings, new ones follow the new geometry.
+# Côté en nodes de la grille carrée des zones de village. Une zone sur
+# 1/village_chance porte un village ; la distance attendue au village le plus
+# proche vaut environ 0.5 * region / sqrt(chance) (~900 nodes par défaut).
+# Changer ces réglages change les plans tirés : les chunks déjà générés
+# gardent leurs bâtiments, les nouveaux suivent la nouvelle géométrie.
+nativevillages.village_region (Native Villages village zone size) int 512 320 2560
+
+# Probability that a village zone carries a village (see village_region)
+# Probabilité qu'une zone porte un village (voir village_region)
+nativevillages.village_chance (Native Villages village probability) float 0.08 0.01 1.0
+
+# Minimum distance in nodes from the village core where building slots are
+# drawn (a uniform disk, not rings); leaves an open core around the core point
+# Distance minimale en nodes du noyau où les slots de bâtiments sont tirés
+# (disque uniforme, pas d'anneaux) ; laisse un cœur dégagé autour du noyau
+nativevillages.village_radius_min (Native Villages village inner radius) int 20 8 128
+
+# Maximum distance in nodes from the village core where building slots are
+# drawn; the whole village disk stays inside its own grid cell
+# Distance maximale en nodes du noyau où les slots sont tirés ; le disque
+# entier du village reste à l'intérieur de sa propre cellule de grille
+nativevillages.village_radius_max (Native Villages village outer radius) int 56 24 256
+
+# Number of building SLOTS drawn per village: a topographic upper bound, the
+# terrain rejects what is not flat enough (a hilly village keeps fewer)
+# Nombre de SLOTS tirés par village : borne haute topographique, le terrain
+# rejette ce qui n'est pas assez plat (un village vallonné en garde moins)
+nativevillages.village_slots (Native Villages village slots) int 12 2 40
+
+# Slots closer than this to the core prefer the civic drawings (wells,
+# markets, ponds, stables, harbours...) over housing
+# Les slots plus proches que ceci du noyau préfèrent les dessins civiques
+# (puits, marchés, étangs, écuries, ports...) aux habitations
+nativevillages.village_civic_radius (Native Villages civic core radius) int 18 0 64
+
+# Multiplier of the scattered placement density inside village zones, so the
+# surroundings of a village do not constellation with lone houses (1 = same
+# density as outside, 0 = no scattered building inside a village zone)
+# Multiplicateur de la densité de placement dispersé à l'intérieur des zones
+# de village, pour que les abords d'un hameau ne se constellent pas de maisons
+# isolées (1 = même densité qu'à l'extérieur, 0 = aucun bâtiment dispersé dans
+# une zone de village)
+nativevillages.scatter_in_village (Native Villages scattered density in zones) float 0.25 0.0 1.0
+
+# If enabled AND the optional pathv7 mod is present, a village whose core
+# lies near a pathv7 path (see village_path_range) GROWS: bonus building
+# slots on a wider disk (see village_path_bonus_slots), a market town along
+# the road versus a hamlet in the wilds. Villages still stand anywhere (the
+# cores keep their uniform positions) and slots falling ON a path are
+# rejected by the ground tests, so the road stays clear. The paths are
+# detected by recomputing pathv7's own noises, with no map access. Without
+# pathv7, or disabled, every village keeps its base size.
+# Si activé ET le mod optionnel pathv7 est présent, un village dont le noyau
+# se trouve près d'un chemin pathv7 (voir village_path_range) GRANDIT :
+# slots de bâtiments bonus sur un disque plus large (voir
+# village_path_bonus_slots), une bourgade marchande le long de la route
+# contre un hameau dans la nature. Les villages restent présents partout
+# (les noyaux gardent leurs positions uniformes) et les slots tombant SUR un
+# chemin sont rejetés par les tests de sol, si bien que la route reste
+# dégagée. Les chemins sont détectés en recalculant les bruits de pathv7
+# lui-même, sans accès à la carte. Sans pathv7, ou désactivé, chaque village
+# garde sa taille de base.
+nativevillages.villages_prefer_paths (Native Villages villages grow near paths) bool true
+
+# Maximum distance in nodes between a village core and a pathv7 path for the
+# village to grow (see villages_prefer_paths)
+# Distance maximale en nodes entre un noyau de village et un chemin pathv7
+# pour que le village grandisse (voir villages_prefer_paths)
+nativevillages.village_path_range (Native Villages path proximity radius) int 96 24 400
+
+# Bonus building SLOTS added to a village when it grows near a pathv7 path
+# (see villages_prefer_paths); the disk also widens accordingly
+# Slots de bâtiments BONUS ajoutés à un village lorsqu'il grandit près d'un
+# chemin pathv7 (voir villages_prefer_paths) ; le disque s'élargit aussi
+# en conséquence
+nativevillages.village_path_bonus_slots (Native Villages path bonus slots) int 8 0 28

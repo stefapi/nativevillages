@@ -35,11 +35,16 @@ The Native Villages mod is in a stable, functional state with comprehensive biom
 - **Performance**: Generation completes within acceptable time limits
 - **Compatibility**: Works with standard Minetest installations
 
-### Groupement en villages (2026-10-09) 📋 PROPOSITION RÉDIGÉE (non implémentée)
+### Groupement en villages (2026-10-09) ✅ IMPLÉMENTÉ (tests en jeu en attente)
 - **Diagnostic** : aucun groupement de bâtiments n'existe — sites dispersés indépendants (placement.lua), anti-collision pour seul lien ; l'origine prévoyait 6 monoblocs géants jamais livrés (`villages.lua` origine, aucun `*village*.mts` dans les 42 fichiers) — le groupement n'a jamais fonctionné
 - **Proposition** : `plans/proposition-villages-groupement.md` — Stratégie B « zones villages déterministes + slots individuels filtrés par le terrain » : grille 512 nodes (`PcgRandom(seed, séquence cellule)`), noyau + disque de slots r 20..56 (12 tirés, terrain n'en valide qu'une partie → suivi topographique), réutilisation intégrale de la validation `try_site`, de la file différée (extension du confinement `emerge_area` aux axes XZ), de l'anti-collision, du sol élu et du peuplement ; rôle civique au cœur (puits/marché/autel) ; 8 settings prévus (`use_villages`, `village_region`, `village_chance`, `village_radius_min/max`, `village_slots`, `village_civic_radius`, `scatter_in_village`)
 - **Approches écartées** : monoblocs géants (non conformes topographie, fichiers inexistants — rejet utilisateur) ; croissance gloutonne à état partagé (non déterministe inter-chunks, réentrance incompatible avec la file différée)
 - **Reste à faire** : validation utilisateur → implémentation §5.2 du plan (module `village_zones.lua` + greffe placement.lua + settings), puis tests §5.3 (déterminisme /deleteblocks, suivi topographique, régression `use_villages=false`)
+
+### Affinité chemins pathv7 + groupement villages (2026-10-09) ✅ IMPLÉMENTÉ (tests en jeu en attente)
+- **Groupement** : voir plans/proposition-villages-groupement.md §0 (zones 512, slots disque r 20..56, validation terrain par slot, différé XZ, 8 settings)
+- **Croissance pathv7** : villages partout (noyaux jamais déplacés) ; village à ≤ `village_path_range` (96) d'un chemin pathv7 → `village_path_bonus_slots` (8) slots bonus sur disque élargi clampé (20 slots vs 12), détection sans carte par recalcul des 4 bruits de pathv7 ; slots sur le chemin rejetés par le test de sol (route dégagée) ; sans pathv7 = inertie totale
+- **Reste à tester en jeu** : villages le long des chemins visibles, route dégagée au centre (slots sur chemin rejetés par le test de sol), régression sans pathv7
 
 ### Biome-Adaptive Building Soil (2026-10-08) ✅ IMPLÉMENTÉ (tests en jeu en attente)
 - **Ce qui fonctionne** (implémenté, syntaxe validée `texluac -p` → SYNTAX OK) : module `soil_replacement.lua` (`nativevillages.soil`) construisant et mettant en cache par biome la table de remplacement `{source = cible}`, consommée par le 4ᵉ argument `replacement` de `minetest.place_schematic` dans placement.lua ; cible = `node_top` du biome réel enregistré (biomes tiers inclus), fallback par catégorie logique, sinon sol intact ; setting `nativevillages.adapt_soil` (défaut `true`) restaure le comportement historique à `false`

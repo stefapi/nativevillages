@@ -31,6 +31,11 @@ dofile(path .. "soil_replacement.lua") --
 -- files so that nativevillages.placement.register_building() is available)
 dofile(path .. "placement.lua") --
 
+-- Deterministic village zones (must load after placement.lua, whose
+-- on_generated consumes nativevillages.village, and before the
+-- *buildings.lua files it counts the civic drawings of)
+dofile(path .. "village_zones.lua") --
+
 -- Centralised spawning layer (must load after placement.lua, whose
 -- deferred jobs call nativevillages.spawn.populate(), and before the
 -- *creatures.lua files, whose mobs:spawn calls use
