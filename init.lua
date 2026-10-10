@@ -27,6 +27,11 @@ dofile(path .. "biomes.lua") --
 -- consumes nativevillages.soil in turn)
 dofile(path .. "soil_replacement.lua") --
 
+-- Furniture variation of the placed houses (must load after
+-- soil_replacement.lua, whose pattern it mirrors, and before
+-- placement.lua, which consumes nativevillages.deco in turn)
+dofile(path .. "deco_replacement.lua") --
+
 -- Placement engine and building factory (must load before the buildings
 -- files so that nativevillages.placement.register_building() is available)
 dofile(path .. "placement.lua") --

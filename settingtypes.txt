@@ -81,6 +81,25 @@ nativevillages.debug_placement (Native Villages debug placement) bool false
 # schematic soils untouched
 nativevillages.adapt_soil (Native Villages adapt building soil to biome) bool true
 
+# If enabled, the decorative furniture of the placed houses varies per
+# house: from a per site deterministic draw (a regenerated chunk redraws
+# the same furniture), some trigger nodes of the family catalogue are
+# swapped at placement time for alternative nodes (see deco_replacement.
+# lua); civic structures, beds, anvils and the population triggers of
+# spawn.lua are never swapped away, and the deterministic population
+# follows the furniture actually present. Disable to keep every house of
+# a family strictly identical (historical behaviour)
+# Si activé, le mobilier décoratif des maisons posées varie de maison en
+# maison : selon un tirage déterministe par site (un chunk régénéré
+# redessine le même mobilier), certains nœuds déclencheurs du catalogue
+# de la famille sont échangés à la pose contre des nœuds alternatifs
+# (voir deco_replacement.lua) ; les structures civiques, les lits, les
+# enclumes et les déclencheurs de peuplement de spawn.lua ne sont jamais
+# échangés, et le peuplement déterministe suit le mobilier réellement
+# présent. Désactiver pour garder toutes les maisons d'une famille
+# strictement identiques (comportement historique)
+nativevillages.vary_deco (Native Villages vary house furniture) bool true
+
 # If enabled, every building placed by the new placement engine is
 # deterministically populated right after placement: one inhabitant per
 # bed (male/female alternated), one mob per native trigger node

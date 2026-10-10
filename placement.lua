@@ -60,6 +60,7 @@ nativevillages = nativevillages or {}
 
 local B = nativevillages.biomes
 local Soil = nativevillages.soil
+local Deco = nativevillages.deco
 
 local P = {}
 nativevillages.placement = P
@@ -141,6 +142,19 @@ if scatter_in_village < 0 then
 elseif scatter_in_village > 1 then
     scatter_in_village = 1
 end
+
+-- vary_deco (default true): furniture variation of the placed houses
+-- (see deco_replacement.lua), a decorative counterpart of adapt_soil
+-- above reading the same once-at-load pattern
+local vary_deco = minetest.settings:get_bool("nativevillages.vary_deco", true)
+
+-- Seed of the furniture variation draw: a constant distinct from every
+-- other PRNG stream of the mod (dungeon_entrances.lua seeds on the raw
+-- world seed, see its SEED), mixed with the world seed so two worlds
+-- vary their houses differently while a regenerated chunk of the same
+-- world (mapblock reset, /deleteblocks) redraws the identical furniture
+local DECO_SEED = 0x5EEDC0DE
+    + (tonumber(minetest.get_mapgen_setting("seed") or "") or 0)
 
 -- Village grouping layer (bound lazily: placement.lua loads BEFORE
 -- village_zones.lua per init.lua, the local V is captured at the first
@@ -643,11 +657,48 @@ local function civic_registry()
 end
 
 -- Real placement of one accepted job: ground adaptation table of the
--- elected biome applied while the .mts is decoded, footprint persisted
--- once really on the map, deterministic population. Module level: the
--- deferred village slot validations place through it too
+-- elected biome applied while the .mts is decoded, furniture variation
+-- merged on top, footprint persisted once really on the map,
+-- deterministic population. Module level: the deferred village slot
+-- validations place through it too
 local function run_job(job)
     local repl = Soil.replacement_for(job.biome_name)
+    -- Furniture variation (see deco_replacement.lua), drawn from a PRNG
+    -- seeded on the site footprint: deterministic per site, a chunk
+    -- regenerated later redraws the same furniture. Soil.replacement_for
+    -- returns the per biome CACHED table, so the merge happens in a
+    -- fresh copy (mutating repl would leak the swaps of this house into
+    -- every later house of the same biome); the soil and deco keys are
+    -- disjoint anyway (ground nodes vs furniture nodes), the merge order
+    -- is therefore irrelevant
+    if vary_deco and job.box then
+        local rng = PcgRandom(DECO_SEED, job.box.x1, job.box.y1,
+            job.box.z1)
+        local deco = Deco.replacement_for(job, rng)
+        if next(deco) then
+            if repl then
+                local merged = {}
+                for k, v in pairs(repl) do
+                    merged[k] = v
+                end
+                for k, v in pairs(deco) do
+                    merged[k] = v
+                end
+                repl = merged
+            else
+                repl = deco
+            end
+            if debug_placement then
+                local n = 0
+                for _ in pairs(deco) do
+                    n = n + 1
+                end
+                minetest.log("action", "[nativevillages] deco varied for "
+                    .. job.name .. " at (" .. job.pos.x .. "," .. job.pos.y
+                    .. "," .. job.pos.z .. "): " .. n .. " swap(s)")
+            end
+        end
+    end
     local ok = minetest.place_schematic(job.pos, job.schematic,
         tostring(job.rot), repl, true)
     if ok then

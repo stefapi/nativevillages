@@ -51,7 +51,7 @@ local sources = {
 -- of biomes.lua, plus a few floor friendly variants)
 local category_ground = {
     grassland = {"default:dirt_with_grass"},
-    forest = {"default:dirt_with_grass"},
+    forest = {"default:dirt_with_grass","defaut:dirt_with_rainforest_litter"},
     jungle = {"default:dirt_with_rainforest_litter", "default:dirt_with_grass"},
     savanna = {"default:dry_dirt_with_dry_grass", "default:dirt_with_grass"},
     desert = {"default:desert_sand", "default:sand"},
