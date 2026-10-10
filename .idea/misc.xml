@@ -4,9 +4,7 @@
     <option name="sdkName" value="Poetry (fastapi_vite_vue)" />
   </component>
   <component name="KubernetesApiPersistence">{}</component>
-  <component name="KubernetesApiProvider">{
-  &quot;isMigrated&quot;: true
-}</component>
+  <component name="KubernetesApiProvider"><![CDATA[{}]]></component>
   <component name="MarkdownProjectSettings" wasCopied="true">
     <PreviewSettings splitEditorLayout="SPLIT" splitEditorPreview="PREVIEW" useGrayscaleRendering="false" zoomFactor="1.0" maxImageWidth="0" showGitHubPageIfSynced="false" allowBrowsingInPreview="false" synchronizePreviewPosition="true" highlightPreviewType="NONE" highlightFadeOut="5" highlightOnTyping="true" synchronizeSourcePosition="true" verticallyAlignSourceAndPreviewSyncPosition="true" showSearchHighlightsInPreview="false" showSelectionInPreview="true" openRemoteLinks="true" replaceUnicodeEmoji="false" lastLayoutSetsDefault="false">
       <PanelProvider>
@@ -90,11 +88,6 @@
     </LinkMapSettings>
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="Poetry (fastapi_vite_vue)" project-jdk-type="Python SDK" />
-  <component name="SshConsoleOptionsProvider">
-    <option name="myEncoding" value="UTF-8" />
-    <option name="myConnectionType" value="CURRENT_VAGRANT" />
-    <option name="myConnectionId" value="" />
-  </component>
   <component name="VagrantProjectSettings">
     <option name="instanceFolder" value="" />
     <option name="provider" value="" />
