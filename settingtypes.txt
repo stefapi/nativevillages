@@ -246,3 +246,28 @@ nativevillages.randungeon_entrance_chance (Native Villages randungeon entrance c
 # chaque niveau allonge la construction au placement du village (la
 # construction bloque brièvement le serveur, un donjon à la fois).
 nativevillages.randungeon_entrance_levels (Native Villages randungeon entrance levels) int 3 1 8
+
+# If enabled AND the optional multidimensions mod is installed, the
+# villages and houses of this mod also spawn inside the multidimensions
+# dimensions. The eligible dimensions are resolved at runtime from the
+# dimensions actually registered by the game (earthlike, savana, cold,
+# desert, sandstone and flatland by default; hot, water and
+# floatandlike are excluded, see dimensions_blacklist). Without the
+# multidimensions mod, this setting has no effect at all.
+# Si activé ET le mod optionnel multidimensions installé, les villages
+# et maisons de ce mod apparaissent aussi dans les dimensions de
+# multidimensions. Les dimensions éligibles sont résolues à l'exécution
+# d'après les dimensions réellement enregistrées par le jeu (earthlike,
+# savana, cold, desert, sandstone et flatland par défaut ; hot, water
+# et floatandlike sont exclues, voir dimensions_blacklist). Sans le mod
+# multidimensions, ce réglage n'a aucun effet.
+nativevillages.use_dimensions (Native Villages spawn in multidimensions dimensions) bool true
+
+# Comma separated list of EXACT dimension names (case insensitive)
+# excluded from the village spawning even when they would be eligible
+# (see use_dimensions); empty to exclude none.
+# Liste séparée par des virgules de noms EXACTS de dimensions
+# (insensible à la casse) exclues du spawn des villages même si
+# elles seraient éligibles (voir use_dimensions) ; vide pour n'en
+# exclure aucune.
+nativevillages.dimensions_blacklist (Native Villages excluded dimensions) string hot,water,floatandlike

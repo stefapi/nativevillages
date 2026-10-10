@@ -36,6 +36,13 @@ dofile(path .. "deco_replacement.lua") --
 -- files so that nativevillages.placement.register_building() is available)
 dofile(path .. "placement.lua") --
 
+-- Optional multidimensions support (must load AFTER placement.lua,
+-- whose internals P._try_at / P._civic_registry it replays on the
+-- deferred dimension fragments, and BEFORE village_zones.lua, whose
+-- V.plan salted variants it consumes; its multidimensions global
+-- probe is lazy, multidimensions itself may load after this mod)
+dofile(path .. "dimension_support.lua") --
+
 -- Deterministic village zones (must load after placement.lua, whose
 -- on_generated consumes nativevillages.village, and before the
 -- *buildings.lua files it counts the civic drawings of)

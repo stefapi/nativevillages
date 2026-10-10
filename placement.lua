@@ -161,6 +161,11 @@ local DECO_SEED = 0x5EEDC0DE
 -- generated chunk instead)
 local V = nil
 
+-- Dimension support layer (bound lazily like V above:
+-- dimension_support.lua loads AFTER this file per init.lua, the local
+-- Dim is captured at the first generated chunk instead)
+local Dim = nil
+
 -- The engine indexes the mapgen voxelmanip through its emerged area, an
 -- API only available since Minetest 5.1. The capability CANNOT be probed
 -- at mod load time: on Luanti 5.x servers minetest.get_voxel_manip called
@@ -337,6 +342,14 @@ local function init_ids()
         "default:water_source", "default:river_water_source",
         "mcl_core:water_source", "mcl_core:river_water_source",
     }, water_ids)
+    -- dimension grounds (dimension_support.lua): every eligible
+    -- multidimensions dimension injects its NUMERIC ground content
+    -- ids into the category sets here, so a building sharing a
+    -- category with the dimension accepts its ground; strict no-op
+    -- without the mod (Dim nil or disabled)
+    if Dim and Dim.enabled then
+        Dim.inject_ground(ground_ids)
+    end
     ids_ready = true
 end
 
@@ -656,6 +669,11 @@ local function civic_registry()
     return civic_list, civic_total
 end
 
+-- Internal contract (dimension support): the deferred dimension path
+-- of dimension_support.lua replays the village slot flow outside this
+-- callback and needs the same civic pool to filter per dimension
+P._civic_registry = civic_registry
+
 -- Real placement of one accepted job: ground adaptation table of the
 -- elected biome applied while the .mts is decoded, furniture variation
 -- merged on top, footprint persisted once really on the map,
@@ -902,8 +920,12 @@ local function try_at(ctx)
             -- surroundings of a village must not constellation with
             -- isolated houses, the grouped slots play that role there
             if V and villages_on then
+                -- in a dimension fragment the plan is salted by the
+                -- dimension (independent village layouts per world
+                -- layer; salt 0 = surface = the historical plan)
                 local plan = V.plan(math.floor(scx / V.region),
-                    math.floor(scz / V.region))
+                    math.floor(scz / V.region),
+                    ctx.dim and ctx.dim.salt or nil)
                 if plan and ctx.rng:next(0, 999999) / 999999
                     >= scatter_in_village then
                     return false
@@ -1023,7 +1045,14 @@ local function try_at(ctx)
             local surface_y = swampy and vm_top_node(ctx.va, ctx.data,
                 ctx.yfloor, cx, cz, ctx.top) or gy
             local ground_ok, ground_biome
-            if gy then
+            if gy and ctx.dim then
+                -- dimension fragment: no real biome to test (the
+                -- engine would answer the surface biome of the
+                -- column), the injected dimension ground ids already
+                -- decided; the pseudo biome label only feeds the logs
+                -- and the soil election fallback
+                ground_ok, ground_biome = true, ctx.dim.label
+            elseif gy then
                 ground_ok, ground_biome = biome_ok(cx, gy, cz, def.biome_set)
             end
             if not gy then
@@ -1047,7 +1076,13 @@ local function try_at(ctx)
                     local c = (swampy and surface_y or gy) + 0.5
                     local y_lo = def.y_min
                     local y_hi = def.y_max
-                    if relax_altitude then
+                    if ctx.dim then
+                        -- dimension fragment: the absolute altitude
+                        -- window of the dimension replaces the
+                        -- historical band, relax_altitude is
+                        -- neutralised there
+                        y_lo, y_hi = ctx.dim.y_lo, ctx.dim.y_hi
+                    elseif relax_altitude then
                         y_lo = y_lo - RELAX_DOWN
                         y_hi = y_hi + RELAX_UP
                     end
@@ -1163,6 +1198,13 @@ local function try_at(ctx)
     return false
 end
 
+-- Internal contract (dimension support): the deferred dimension path
+-- of dimension_support.lua calls this very site attempt loop on its
+-- own re-read VoxelManip of a dimension fragment; ctx.dim drives the
+-- dimension specific branches inside (pseudo biome, absolute altitude
+-- window, salted village plans, place_now placement)
+P._try_at = try_at
+
 -- Engine: chunk by chunk alternative to the mapgen decorations.
 -- Design notes:
 --   * the VoxelManip of the mapgen object is only READ (column scans,
@@ -1180,6 +1222,13 @@ end
 --     missing mapblocks first (see the deferred placement below)
 if use_new then
     minetest.register_on_generated(function(minp, maxp, blockseed)
+        -- bind the dimension layer once available
+        -- (dimension_support.lua loads after this file, see init.lua),
+        -- BEFORE init_ids: the dimension ground ids are injected
+        -- inside it
+        if Dim == nil then
+            Dim = nativevillages.dimensions
+        end
         if not ids_ready then
             init_ids()
         end
@@ -1191,6 +1240,22 @@ if use_new then
         end
         if #registry == 0 or total_weight <= 0 then
             return
+        end
+
+        -- Dimension fragments are routed ENTIRELY to the deferred
+        -- path of dimension_support.lua: multidimensions writes its
+        -- own terrain from its own callback, whose order relative to
+        -- ours is not guaranteed, so NOTHING is decided here on the
+        -- mapgen voxelmanip (neither scatter nor village slots). A
+        -- fragment outside every dimension (nil dimcfg) keeps the
+        -- surface flow below untouched
+        if Dim and Dim.enabled then
+            local dimcfg = Dim.fragment(minp, maxp)
+            if dimcfg then
+                Dim.process_fragment(minp, maxp, blockseed, dimcfg,
+                    registry, total_weight)
+                return
+            end
         end
 
         local prng = PcgRandom(blockseed)

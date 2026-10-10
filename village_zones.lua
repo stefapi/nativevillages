@@ -233,12 +233,22 @@ end
 -- otherwise { nx = ..., nz = ..., slots = { {x, z, rot, civic}, ... } }
 -- in a stable draw order. PURE and cached: two fragments of the same
 -- village read the exact same table, whatever their generation order.
-function V.plan(cx, cz)
-    local key = cx .. "," .. cz
+-- The optional third argument is the dimension SALT (the dim_y of a
+-- multidimensions dimension, see dimension_support.lua): nil or 0 is
+-- the surface, whose seed stays exactly SEED so the surface plans are
+-- bit for bit the historical ones, while every salted world layer
+-- draws its own independent villages from the same cells (the salt
+-- also disables the pathv7 boost, whose paths only exist on the
+-- surface). The salt must be an INTEGER to keep the seed exact in
+-- Lua numbers (dim_y values are integers by construction)
+function V.plan(cx, cz, dim)
+    local salt = dim or 0
+    local key = salt .. "," .. cx .. "," .. cz
     if plans[key] ~= nil then
         return plans[key]
     end
-    local rng = PcgRandom(SEED, cell_sequence(cx, cz))
+    local seed = SEED + salt * 0x40000000
+    local rng = PcgRandom(seed, cell_sequence(cx, cz))
     local plan
     -- integer comparison: village when the draw falls strictly below
     -- chance * 1e6, so chance = 1 really elects EVERY cell (a float
@@ -261,7 +271,7 @@ function V.plan(cx, cz)
         -- path are still rejected by the ground test of placement.lua
         -- (path wood is not a ground node): the road stays clear, the
         -- houses grow AROUND it
-        local near_path = prefer_paths
+        local near_path = salt == 0 and prefer_paths
             and nearest_path(nx, nz, PATH_RANGE) ~= nil
         local n_slots = SLOTS
         local r_min, r_max = R_MIN, R_MAX
@@ -306,9 +316,10 @@ function V.plan(cx, cz)
             nx = nx, nz = nz, slots = slots,
             -- plan identity for the per slot PRNG of placement.lua:
             -- PcgRandom(plan.seed, plan.seq + slot index)
-            seed = SEED,
+            seed = seed,
             seq = cell_sequence(cx, cz),
             near_path = near_path, -- debug: village boosted by a pathv7 path
+            dim = salt, -- debug: 0 = surface, else the dimension salt
         }
     end
     plans[key] = plan
