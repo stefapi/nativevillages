@@ -25,8 +25,11 @@
 -- minetest.registered_nodes (known bed mod prefixes or a bed group)
 -- instead of a frozen node list. A bare "_bottom"/"_top" suffix is NOT
 -- a sufficient criterion: doors, double plants and growing crops share
--- it. Anvils are detected by name ("anvil" substring, covering
--- anvil:anvil and mcl_anvils:anvil_damage_*).
+-- it. Bed SUBSTITUTES without any bed group or prefix (the one node
+-- non walkable cottages:sleeping_mat) are added by exact name from
+-- bed_names below, guarded by registered_nodes so an installation
+-- without cottages never sees them. Anvils are detected by name
+-- ("anvil" substring, covering anvil:anvil and mcl_anvils:anvil_damage_*).
 --
 -- populate() is purely additive: it returns silently when the
 -- nativevillages.deterministic_spawn setting is disabled, when the job
@@ -62,12 +65,25 @@ local bed_set = {}     -- O(1) lookup companion of Spawn.bed_nodes
 -- criterion and as the fallback before register_on_mods_loaded ran
 local bed_prefixes = {"beds:", "mcl_beds:", "colorful_beds:", "bed:"}
 
+-- Static bed node NAMES (neither a bed group nor a known bed mod
+-- prefix: the cottages sleeping mat is a one node, non walkable bed
+-- substitute carrying only groups.snappy). Villagers spawn at them
+-- exactly like at beds; they join Spawn.bed_nodes at mods_loaded time
+-- ONLY when really registered, so worlds without cottages keep a list
+-- find_nodes_in_area can fully resolve
+local bed_names = {"cottages:sleeping_mat"}
+
 function Spawn.is_bed(name)
 	if bed_set[name] then
 		return true
 	end
 	for _, prefix in ipairs(bed_prefixes) do
 		if name:sub(1, #prefix) == prefix then
+			return true
+		end
+	end
+	for _, bed_name in ipairs(bed_names) do
+		if name == bed_name then
 			return true
 		end
 	end
@@ -189,6 +205,15 @@ minetest.register_on_mods_loaded(function()
 		end
 		if Spawn.is_anvil(name) then
 			Spawn.anvil_nodes[#Spawn.anvil_nodes + 1] = name
+		end
+	end
+	-- explicit bed names are bed substitutes: they enter the scanned
+	-- list only when their node is registered (absence of cottages
+	-- must not leave an unresolvable name in the search list)
+	for _, bed_name in ipairs(bed_names) do
+		if minetest.registered_nodes[bed_name] and not bed_set[bed_name] then
+			bed_set[bed_name] = true
+			Spawn.bed_nodes[#Spawn.bed_nodes + 1] = bed_name
 		end
 	end
 	table.sort(Spawn.bed_nodes)
