@@ -26,9 +26,11 @@
 -- instead of a frozen node list. A bare "_bottom"/"_top" suffix is NOT
 -- a sufficient criterion: doors, double plants and growing crops share
 -- it. Bed SUBSTITUTES without any bed group or prefix (the one node
--- non walkable cottages:sleeping_mat) are added by exact name from
--- bed_names below, guarded by registered_nodes so an installation
--- without cottages never sees them. Anvils are detected by name
+-- non walkable cottages:sleeping_mat, and the two node cottages bed
+-- whose foot half alone is listed: its head half must never spawn a
+-- second villager) are added by exact name from bed_names below,
+-- guarded by registered_nodes so an installation without cottages
+-- never sees them. Anvils are detected by name
 -- ("anvil" substring, covering anvil:anvil and mcl_anvils:anvil_damage_*).
 --
 -- populate() is purely additive: it returns silently when the
@@ -67,11 +69,13 @@ local bed_prefixes = {"beds:", "mcl_beds:", "colorful_beds:", "bed:"}
 
 -- Static bed node NAMES (neither a bed group nor a known bed mod
 -- prefix: the cottages sleeping mat is a one node, non walkable bed
--- substitute carrying only groups.snappy). Villagers spawn at them
--- exactly like at beds; they join Spawn.bed_nodes at mods_loaded time
--- ONLY when really registered, so worlds without cottages keep a list
--- find_nodes_in_area can fully resolve
-local bed_names = {"cottages:sleeping_mat"}
+-- substitute carrying only groups.snappy; the cottages bed is a two
+-- node bed whose FOOT half alone is listed, is_bed_foot rejecting the
+-- head half, so one villager spawns per bed and never two). Villagers
+-- spawn at them exactly like at beds; they join Spawn.bed_nodes at
+-- mods_loaded time ONLY when really registered, so worlds without
+-- cottages keep a list find_nodes_in_area can fully resolve
+local bed_names = {"cottages:sleeping_mat", "cottages:bed_foot"}
 
 function Spawn.is_bed(name)
 	if bed_set[name] then
@@ -180,7 +184,10 @@ Spawn.anvil_mobs = {
 -- statistical channel. Called from inside register_on_mods_loaded
 -- callbacks of those files (Spawn.bed_nodes is final by then, because
 -- the callback below is registered first); degrades to the historical
--- single trigger list on games without any registered bed.
+-- single trigger list on games without any registered bed. It shares
+-- the very same resolved Spawn.bed_nodes list as the deterministic
+-- populate() scan, so the explicit bed_names entries (cottages
+-- sleeping mat, cottages bed foot) reach both channels at once.
 function Spawn.neighbors_for(trigger)
 	local list = {trigger}
 	for _, bed in ipairs(Spawn.bed_nodes) do
@@ -332,12 +339,19 @@ function Spawn.populate(job)
 	end
 
 	-- beds are counted by their foot half only, so a two node bed adds
-	-- a single inhabitant (single node beds count as their own foot)
+	-- a single inhabitant (single node beds count as their own foot):
+	-- "_top" and "_head" endings are the upper halves of a bed whose
+	-- foot is counted separately (beds:bed_top, mcl_beds:*_top,
+	-- cottages:bed_head), while "_bottom"/"_foot" halves and one node
+	-- substitutes like cottages:sleeping_mat are kept
 	local function is_bed_foot(name)
 		if not Spawn.is_bed(name) then
 			return false
 		end
 		if name:sub(-4) == "_top" then
+			return false
+		end
+		if name:sub(-5) == "_head" then
 			return false
 		end
 		return true
