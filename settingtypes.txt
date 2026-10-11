@@ -271,3 +271,19 @@ nativevillages.use_dimensions (Native Villages spawn in multidimensions dimensio
 # elles seraient éligibles (voir use_dimensions) ; vide pour n'en
 # exclure aucune.
 nativevillages.dimensions_blacklist (Native Villages excluded dimensions) string hot,water,floatandlike
+
+# If enabled AND the optional cloudlands mod is installed, the floating
+# islands of cloudlands (the Hallelujah Mountains of the normal world)
+# also receive a small set of buildings of this mod, placed by the
+# deferred island flow of cloudlands_support.lua: tents on every
+# eligible island (radius >= 12), tents plus small houses on the large
+# deep ones (depth >= 28 and radius >= 20). Without the cloudlands
+# mod, this setting has no effect at all.
+# Si activé ET le mod optionnel cloudlands installé, les îles
+# flottantes de cloudlands (les montagnes Hallelujah du monde normal)
+# reçoivent elles aussi un petit ensemble de bâtiments de ce mod, posés
+# par le flux différé d'îles de cloudlands_support.lua : des tentes sur
+# chaque île éligible (rayon >= 12), tentes plus petites maisons sur
+# les grandes îles profondes (profondeur >= 28 et rayon >= 20). Sans le
+# mod cloudlands, ce réglage n'a aucun effet.
+nativevillages.cloudlands_villages (Native Villages spawn on cloudlands islands) bool true

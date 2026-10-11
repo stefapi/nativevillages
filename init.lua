@@ -43,6 +43,14 @@ dofile(path .. "placement.lua") --
 -- probe is lazy, multidimensions itself may load after this mod)
 dofile(path .. "dimension_support.lua") --
 
+-- Optional cloudlands support (must load AFTER placement.lua and
+-- dimension_support.lua, whose deferred pattern it clones, and BEFORE
+-- village_zones.lua, whose V.plan salted variants it consumes; the
+-- module handles the absence of the cloudlands mod by itself, its
+-- cloudlands global probe is lazy, cloudlands itself may load after
+-- this mod)
+dofile(path .. "cloudlands_support.lua") --
+
 -- Deterministic village zones (must load after placement.lua, whose
 -- on_generated consumes nativevillages.village, and before the
 -- *buildings.lua files it counts the civic drawings of)
@@ -72,6 +80,7 @@ dofile(path .. "desertblocks.lua") --
 dofile(path .. "junglebuildings.lua") --
 dofile(path .. "icebuildings.lua") --
 dofile(path .. "grasslandbuildings.lua") --
+dofile(path .. "cloudlandsbuildings.lua") --
 dofile(path .. "lakebuildings.lua") --
 dofile(path .. "desertbuildings.lua") --
 dofile(path .. "savannabuildings.lua") --
