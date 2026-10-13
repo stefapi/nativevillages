@@ -729,6 +729,19 @@ local function run_job(job)
             minetest.log("action", "[nativevillages] soil adapted for "
                 .. job.name .. " in biome " .. job.biome_name)
         end
+        -- multi level basements under the eligible houses (see
+        -- basements.lua): guarded pcall, purely additive, no-op when
+        -- the nativevillages.basements setting is disabled. NOT a
+        -- silent pcall: a broken hook must surface in the log, a mute
+        -- one once hid a systematic write failure (see progress.md)
+        local Basement = nativevillages.basements
+        if Basement and Basement.maybe_dig_basement then
+            local ok, err = pcall(Basement.maybe_dig_basement, job)
+            if not ok then
+                minetest.log("warning", "[nativevillages] basement hook "
+                    .. "failed for " .. job.name .. ": " .. tostring(err))
+            end
+        end
         -- deterministic population of the placed building (beds, native
         -- trigger nodes, anvils): purely additive, silent no-op when the
         -- nativevillages.deterministic_spawn setting is disabled or the

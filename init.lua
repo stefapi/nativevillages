@@ -68,6 +68,13 @@ dofile(path .. "spawn.lua") --
 -- global probe is lazy, randungeon itself loads after this mod)
 dofile(path .. "dungeon_entrances.lua") --
 
+-- Basements under the village houses (must load after
+-- dungeon_entrances.lua, whose randungeon entrance draw
+-- maybe_dig_basement replays for the mutual exclusion of the two
+-- secrets, and after spawn.lua, whose is_bed/building_biome helpers
+-- its scans consume)
+dofile(path .. "basements.lua") --
+
 -- Buildings
 
 

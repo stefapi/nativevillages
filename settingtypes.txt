@@ -287,3 +287,45 @@ nativevillages.dimensions_blacklist (Native Villages excluded dimensions) string
 # les grandes îles profondes (profondeur >= 28 et rayon >= 20). Sans le
 # mod cloudlands, ce réglage n'a aucun effet.
 nativevillages.cloudlands_villages (Native Villages spawn on cloudlands islands) bool true
+
+# If enabled, a deterministic minority of the eligible houses (30 node
+# foundation houses only, floating island houses excluded) receive a
+# basement: a multi level cellar dug right under the house floor,
+# opening through a wooden trapdoor flush with the floor (a 1x1 ladder
+# shaft, floor slabs, wall torches and a few utility items per level).
+# Houses carrying a hidden randungeon entrance never carry a basement,
+# and the dig gives up on non solid foundations (stilt houses) or when
+# water or lava sits in the way. Disable to keep the historical plain
+# foundations.
+# Si activé, une minorité déterministe des maisons éligibles (maisons à
+# fondation 30 nodes uniquement, maisons des îles flottantes exclues)
+# reçoivent un sous-sol : une cave multi-niveaux creusée juste sous le
+# plancher, ouvrant par une trappe en bois affleurant le sol (un puits
+# d'échelle 1x1, des planchers, des torches murales et quelques objets
+# utilitaires par niveau). Les maisons portant une entrée de donjon
+# randungeon cachée ne portent jamais de sous-sol, et le creusement
+# abandonne sur les fondations non solides (maisons sur pilotis) ou
+# lorsque de l'eau ou de la lave s'y trouve. Désactiver pour conserver
+# les fondations pleines historiques.
+nativevillages.basements (Native Villages house basements) bool true
+
+# Probability per ELIGIBLE house of receiving a basement (see
+# nativevillages.basements): 0.35 gives roughly one basement per village
+# of 5-8 houses, on top of the randungeon exclusions.
+# Probabilité par maison ÉLIGIBLE de recevoir un sous-sol (voir
+# nativevillages.basements) : 0.35 donne environ un sous-sol par village
+# de 5-8 maisons, en plus des exclusions randungeon.
+nativevillages.basement_chance (Native Villages basement chance) float 0.35 0.0 1.0
+
+# Minimum number of levels of the basements (see nativevillages.basements)
+# Nombre minimal de niveaux des sous-sols (voir nativevillages.basements)
+nativevillages.basement_levels_min (Native Villages basement levels min) int 1 1 3
+
+# Maximum number of levels of the basements (see nativevillages.
+# basements); the real depth is further bounded by the 15 node dig
+# limit and the available foundation height under the house
+# Nombre maximal de niveaux des sous-sols (voir nativevillages.
+# basements) ; la profondeur réelle est en outre bornée par la limite
+# de creusement de 15 nodes et la hauteur de fondation disponible sous
+# la maison
+nativevillages.basement_levels_max (Native Villages basement levels max) int 3 1 8
