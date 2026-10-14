@@ -18,7 +18,7 @@
 --     on the island surface;
 --   * "cloudlands_large" additionally on the deep and wide islands
 --     (depth >= 28 and radius >= 20) -> the small houses of the 30
---     node foundation family (offset -29). Their foundation pillars
+--     node foundation family (offset -4). Their foundation pillars
 --     may pierce through the island underside on the shallow spots:
 --     an assumed "pilotis" stilt effect for those large islands, the
 --     very effect the historical _30_ schematics produce on cliffs.
@@ -42,7 +42,7 @@ local buildings = {
         schematic = "tent_big_1.mts",
         biomes = {"cloudlands"},
         anchor = "ground",
-        offset = 0,
+        offset = -4,
         y_max = 30.5,
         y_min = 25.5,
         fill_ratio = 0.00005,
@@ -52,7 +52,7 @@ local buildings = {
         schematic = "tent_big_2.mts",
         biomes = {"cloudlands"},
         anchor = "ground",
-        offset = 0,
+        offset = -4,
         y_max = 30.5,
         y_min = 25.5,
         fill_ratio = 0.00005,
@@ -65,7 +65,7 @@ local buildings = {
         schematic = "hut_2.mts",
         biomes = {"cloudlands_large"},
         anchor = "ground",
-        offset = -29,
+        offset = -4,
         y_max = 20.5,
         y_min = 15.5,
         fill_ratio = 0.00004,
@@ -75,7 +75,7 @@ local buildings = {
         schematic = "small_house_1_0.mts",
         biomes = {"cloudlands_large"},
         anchor = "ground",
-        offset = -29,
+        offset = -4,
         y_max = 20.5,
         y_min = 15.5,
         fill_ratio = 0.00004,
@@ -85,7 +85,7 @@ local buildings = {
         schematic = "house_1_0.mts",
         biomes = {"cloudlands_large"},
         anchor = "ground",
-        offset = -29,
+        offset = -4,
         y_max = 20.5,
         y_min = 15.5,
         fill_ratio = 0.00004,
@@ -95,7 +95,7 @@ local buildings = {
         schematic = "logcabin2.mts",
         biomes = {"cloudlands_large"},
         anchor = "ground",
-        offset = -29,
+        offset = -4,
         y_max = 20.5,
         y_min = 15.5,
         fill_ratio = 0.00004,
@@ -105,7 +105,7 @@ local buildings = {
         schematic = "taverne_2.mts",
         biomes = {"cloudlands_large"},
         anchor = "ground",
-        offset = -29,
+        offset = -4,
         y_max = 20.5,
         y_min = 15.5,
         fill_ratio = 0.00004,
