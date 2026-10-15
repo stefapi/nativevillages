@@ -9,11 +9,15 @@
 --   * eligible houses ONLY: the house name prefixes (grasslandhouse,
 --     deserthouse, savannahouse, icehouse, junglehouse and the defensive
 --     cannibalhouse: the jungle houses register as junglehouse1-3
---     although their schematic files are named cannibalhouse*) AND a
---     "_30_" foundation schematic (the family name still tags the
---     eligible houses; their shallow -4 embed leaves the dig to the
---     natural ground below); this excludes every civic building, and the
---     water anchored lake houses a second time
+--     although their schematic files are named cannibalhouse*) -- every
+--     house family of the *buildings.lua files now anchors at the
+--     shallow offset = -4 (the _30_ tribal families and the imported
+--     house_1_0/house_medieval_fancy/house_with_garden ones alike),
+--     their embed leaves the dig to the natural ground below, and the
+--     historical "_30_" schematic NAME test was retired on 2026-10-15
+--     (it stole 27% of the placed house sites, see maybe_dig_basement);
+--     the prefixes alone exclude every civic building, and the water
+--     anchored lake houses a second time
 --   * the "_cloudlands" buildings are REJECTED: a floating island has
 --     nothing solid under the floor, while the multidimensions
 --     buildings stay eligible (their deferred fragments place real
@@ -1209,14 +1213,19 @@ function Bs.maybe_dig_basement(job)
 
     -- b) eligible houses only: house name prefixes (this alone excludes
     --    every civic building: stable, market, well, tower, pond, blot,
-    --    pit, cage, harbour, fishtrap, logs, pelts, sledge, altar...)
-    --    and the _30_ foundation schematics (this excludes the water
-    --    anchored lake houses a second time)
+    --    pit, cage, harbour, fishtrap, logs, pelts, sledge, altar... --
+    --    and the water anchored lake houses a second time). The
+    --    historical "_30_" schematic name test was RETIRED (2026-10-15):
+    --    it was a proxy for "shallow -4 embed", but every house family
+    --    of the *buildings.lua files now carries offset = -4 (the 16
+    --    tribal _30_ families AND house_1_0/house_medieval_fancy/
+    --    house_with_garden), so the test only stole real houses from
+    --    the draw (21 of the 79 house sites of the 2026-10-15 sessions,
+    --    27%: grasslandhouse_1_0, grasslandhouse_medieval_fancy_1_90,
+    --    grasslandhouse_with_garden_1_0 and their _swamp variants, all
+    --    passing scan_floor_y/scan_ladder_hole/foundation on their
+    --    schematics like the _30_ ones -- /tmp/bsfloor7.py)
     if not is_house(job.name) then
-        return
-    end
-    if type(job.schematic) ~= "string"
-        or not job.schematic:find("_30_", 1, true) then
         return
     end
 
