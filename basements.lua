@@ -1,8 +1,9 @@
 -- Basements dug under the village houses -- multi level cellars opening
 -- through a wooden trapdoor flush with the house floor: a 1x2 ladder
--- shaft (trapdoor column + ladder column leaning on its own support
--- wall), dug levels with floor slabs, wall torches, wood pillars and a
--- few utility items per level.
+-- shaft (ladder column + headroom landing leaning on its own support
+-- wall), pierced through the house floor AND every intermediate slab
+-- by ONE cell only (the ladder column), dug levels with floor slabs,
+-- wall torches, wood pillars and a few utility items per level.
 --
 -- Scope and guards (mirrors the dungeon_entrances.lua conventions):
 --   * eligible houses ONLY: the house name prefixes (grasslandhouse,
@@ -865,21 +866,31 @@ function Bs.dig_basement(job, opts)
     end
 
     -- fill: interior air, slab rows in the floor material, optional
-    -- ceiling beams and corner pillars in wood. The 1x2 shaft (the
-    -- ladder column, which carries every trapdoor in its own axis,
-    -- plus the headroom column beside it) pierces EVERY intermediate
-    -- slab by construction: the fill never writes floor material,
-    -- beams or pillars on those two columns, so no pass can plug the
-    -- hole again (in the degraded mode above, the headroom column
-    -- leaves the shaft and keeps whole slabs); only the bottom slab
-    -- stays whole under the shaft (it is the
-    -- walking floor of the last level). The support column is solid
-    -- floor material from y_bot to floor_y - 1: the wall the ladder
-    -- leans on
-    local function is_shaft(x, z)
-        return (x == ladder.x and z == ladder.z)
-            or (trapdoor_name ~= nil
-                and x == hole.x and z == hole.z)
+    -- ceiling beams and corner pillars in wood. The shaft pierces
+    -- EVERY slab by ONE cell only, the LADDER column (it carries
+    -- every rung and trapdoor in its own axis, one single descent
+    -- line like the house floor hatch): at each slab row the fill
+    -- writes the floor material back into the headroom column (hole),
+    -- so the intermediate crossings are 1 cell wide like the house
+    -- floor -- between the slabs the 1x2 shaft stays open (the
+    -- headroom is the landing at the top of the ladder of each
+    -- level). In the degraded mode above (no trapdoor node) the
+    -- headroom column leaves the shaft entirely and keeps whole
+    -- slabs; only the bottom slab stays whole under the shaft (it is
+    -- the walking floor of the last level). The support column is
+    -- solid floor material from y_bot to floor_y - 1: the wall the
+    -- ladder leans on. The y argument is optional: nil (the torch
+    -- and item ring guards below) excludes BOTH shaft columns, a slab
+    -- row y excludes the ladder column only (the headroom cell is
+    -- then filled by the slab_row branch)
+    local function is_shaft(x, z, y)
+        if x == ladder.x and z == ladder.z then
+            return true
+        end
+        if trapdoor_name == nil or x ~= hole.x or z ~= hole.z then
+            return false
+        end
+        return y == nil or not slab_row[y]
     end
     local width = ix2 - ix1 + 1
     local depth = iz2 - iz1 + 1
@@ -891,7 +902,7 @@ function Bs.dig_basement(job, opts)
                 local vi = va:index(x, y, z)
                 if x == support.x and z == support.z then
                     data[vi] = c_floor
-                elseif is_shaft(x, z) then
+                elseif is_shaft(x, z, y) then
                     if y == y_bot then
                         data[vi] = c_floor
                     else
@@ -968,9 +979,12 @@ function Bs.dig_basement(job, opts)
     --    one cell ABOVE the hole, vertical and flush against the
     --    SUPPORT wall: the descent axis stays directly passable, one
     --    click folds the plate flat over the hole to close it. Every
-    --    intermediate slab crossing of the shaft repeats the same
-    --    motif (rung in the slab row, open plate right above it).
-    --    The load time resolved trapdoor_name is paramtype2
+    --    intermediate slab crossing repeats the same motif (rung in
+    --    the slab row, open plate right above it) and the headroom
+    --    cell (hole) beside it carries the slab material written by
+    --    the fill above -- each crossing is ONE cell wide, like the
+    --    house floor hatch. The load time resolved trapdoor_name is
+    --    paramtype2
     --    "facedir" in the doors mod of this install
     --    (doors.register_trapdoor hardcodes it): CLOSED the nodebox
     --    is a flat horizontal plate whatever param2, and OPEN the
