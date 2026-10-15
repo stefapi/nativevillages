@@ -17,8 +17,9 @@
 --     VoxelManip at mod load time fails silently on Luanti servers).
 -- Anchoring semantics are identical in both modes: the schematic base
 -- lands at ground_y + offset, where offset is the old place_offset_y
--- (-29 on the _30_ foundation schematics), so a 30-node high foundation
--- keeps its top layer exactly at surface level on flat terrain. Lake
+-- (-4 on the _30_ foundation schematics, a shallow embed: the floor
+-- sits at rank 5 and the dig below is left to the natural ground), so
+-- the house floor stays exactly at surface level on flat terrain. Lake
 -- schematics (anchor = "water") are based on the flooded place_on node
 -- of the lake bed (dirt/sand) with the historical y_min = y_max = -0.5
 -- filter applied to it; no flatness test is applied to them.
@@ -261,7 +262,8 @@ end
 --   biomes      logical biome categories (see biomes.lua), used both for
 --               the biome list and the acceptable ground nodes
 --   offset      y offset of the schematic base (the old place_offset_y:
---               -29 on the _30_ foundation schematics, 0 on the lake ones)
+--               -4 on the _30_ foundation schematics -- shallow embed,
+--               see basements.lua FOUNDATION_OFFSET -- 0 on the lake ones)
 --   anchor      "ground" (default) or "water" (lake schematics based on
 --               the flooded place_on node of the lake bed, without
 --               flatness test)

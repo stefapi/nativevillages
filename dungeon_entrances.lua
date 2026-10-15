@@ -235,13 +235,12 @@ end
 -- Foundation offset of the placed schematic, derived from its FILE
 -- NAME (the placement registry holding the real def.offset is local to
 -- placement.lua and the job does not carry it): the _30_ foundation
--- schematics anchor with offset -29 (a 30 node high foundation keeps
--- its top layer exactly at surface level, see the *buildings.lua data
--- files), every eligible house of this mod is one of them, hence the
--- generic surface_y = box.y1 - def.offset = box.y1 + 29. The value is
--- only the SCAN CENTRE: the real map (the walkable floor test below)
--- wins over the approximation
-local FOUNDATION_OFFSET = -29
+-- schematics anchor with offset -4 (a shallow 4 node embed, see the
+-- *buildings.lua data files), every eligible house of this mod is one
+-- of them, hence the generic surface_y = box.y1 - def.offset =
+-- box.y1 + 4. The value is only the SCAN CENTRE: the real map (the
+-- walkable floor test below) wins over the approximation
+local FOUNDATION_OFFSET = -4
 
 -- Bed detector of the spawn layer (loaded before this module, see
 -- init.lua), used by the floor scan to reject furniture: without it a
@@ -255,11 +254,11 @@ end
 
 -- Real floor height of the house: first walkable node of the centre
 -- column, scanning down around the schematic derived estimate
--- (box.y1 - offset, i.e. box.y1 + 29 on the _30_ foundations), that has
+-- (box.y1 - offset, i.e. box.y1 + 4 on the shallow -4 embeds), that has
 -- two open nodes above (the interior) and a walkable node below (floor
 -- slab over the foundation: this rejects beds and chests standing on
 -- the floor, which would otherwise be elected as the "floor"). The real
--- map wins over the y1+29 approximation (design doc section 4.1)
+-- map wins over the y1+4 approximation (design doc section 4.1)
 local function scan_floor_y(box, offset)
     local cx = math.floor((box.x1 + box.x2) / 2)
     local cz = math.floor((box.z1 + box.z2) / 2)

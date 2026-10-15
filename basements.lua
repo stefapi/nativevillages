@@ -9,8 +9,9 @@
 --     deserthouse, savannahouse, icehouse, junglehouse and the defensive
 --     cannibalhouse: the jungle houses register as junglehouse1-3
 --     although their schematic files are named cannibalhouse*) AND a
---     "_30_" foundation schematic (a 30 node foundation gives real
---     ground to dig into); this excludes every civic building, and the
+--     "_30_" foundation schematic (the family name still tags the
+--     eligible houses; their shallow -4 embed leaves the dig to the
+--     natural ground below); this excludes every civic building, and the
 --     water anchored lake houses a second time
 --   * the "_cloudlands" buildings are REJECTED: a floating island has
 --     nothing solid under the floor, while the multidimensions
@@ -38,10 +39,10 @@
 -- The dig itself, ONE VoxelManip for the whole cellar:
 --   * n levels of LEVEL_H = 4 interior height, one floor slab under
 --     each level, total depth n * (LEVEL_H + 1) <= MAX_DEPTH (15)
---     nodes and the bottom of the last slab at least box.y1 + 2 (n is
---     clamped down when needed); the XZ footprint is the interior
+--     nodes, dug through the shallow schematic embed into the natural
+--     ground below; the XZ footprint is the interior
 --     rectangle of the house, margin 2 from the schematic walls (at
---     least 2 nodes of retained foundation all around)
+--     least 2 nodes of retained ground all around)
 --   * the floor material follows the biome theme when one is known
 --     (default:desert_sand under the desert houses), default:cobble
 --     otherwise
@@ -177,6 +178,16 @@ end
 local furniture_prefixes = {
     "stairs:", "default:furnace", "default:chest", "default:bookshelf",
     "vessels:", "nativevillages:",
+    -- floor coverings of the regenerated _30_ schematics (wool carpets
+    -- in the desert and ice houses, audited on the .mts files): a
+    -- carpet is walkable and was elected as the "floor" ONE NODE TOO
+    -- HIGH, so the fill pierced the REAL floor slab beside the
+    -- trapdoor -- the reported open hole next to the hatch. A real
+    -- floor never carries those prefixes; a carpeted column now
+    -- elects nothing (the carpet is filtered, and the slab below it
+    -- has no open node above), so the scan slides to a clear probe
+    -- column of the +/-2 ring
+    "wool:", "carpets:",
 }
 
 local function is_furniture_or_stair(name)
@@ -227,7 +238,8 @@ local LEVEL_H = 4       -- interior height of one level
 local MAX_DEPTH = 15    -- total dig depth bound (n * (LEVEL_H + 1))
 local MARGIN = 2        -- margin from the schematic walls
 local SOLID_RATIO = 0.9 -- foundation integrity threshold
-local FOUNDATION_OFFSET = -29 -- _30_ schematics anchor at -29
+local FOUNDATION_OFFSET = -4 -- _30_ schematics anchor at -4 (shallow
+                            -- embed, see the *buildings.lua data files)
 local DOOR_CLEAR = 3    -- chebyshev clearance from any door column
 local ROOF_SPAN = 12    -- roof search height above the floor (interior test)
 local ROOF_MIN_RUN = 3  -- consecutive walkable nodes forming a real ceiling
@@ -257,6 +269,11 @@ local function scan_floor_y(box, offset)
     local columns = {
         {cx, cz},
         {cx - 1, cz}, {cx + 1, cz}, {cx, cz - 1}, {cx, cz + 1},
+        -- the regenerated _30_ schematics lay carpets/wool and beds
+        -- over the centre of some houses (the deserthouse4 centre
+        -- column reads wool all the way down): widen the probe ring
+        -- to +/-2 so a furnished centre no longer hides the floor
+        {cx - 2, cz}, {cx + 2, cz}, {cx, cz - 2}, {cx, cz + 2},
     }
     for _, col in ipairs(columns) do
         local x, z = col[1], col[2]
@@ -338,13 +355,18 @@ end
 --   * chebyshev distance >= DOOR_CLEAR from every door column found by
 --     scan_door_columns (doors, gates, hatches and their thresholds):
 --     the shaft never opens at, in front of, or beside a door again
--- Two ordered passes over the SAME window and the SAME drawn origin:
--- pass 1 additionally requires the eight neighbours to be standable
--- (walkable floor + open above: a true open area of the room), pass 2
--- relaxes to the four-neighbour rule. No rng is drawn inside the
--- loops. Returns {x =, z =}, or nil when nothing valid remains (the
--- caller gives up cleanly: a house without a safe spot keeps its plain
--- floor rather than a doorstep shaft)
+-- Five ordered passes over the SAME window and the SAME drawn origin,
+-- strictest first (see pass_levels below): a roomy house still gets
+-- its historical strict spot (8 standable neighbours, 3 node roof
+-- run), a crowded hut degrades gracefully instead of losing its
+-- basement. The regenerated 2026-10 _30_ schematics are small huts
+-- whose ceilings/roofs are SINGLE node strata with furniture on every
+-- floor cell: the historical two passes elected nothing on ANY of the
+-- 19 eligible schematics (100% "no trapdoor spot" give-ups in game,
+-- 2026-10-14). No rng is drawn inside the loops. Returns
+-- {x =, z =, pass =}, or nil when nothing valid remains (the caller
+-- gives up cleanly: a house without a safe spot keeps its plain floor
+-- rather than a doorstep shaft)
 local function scan_ladder_hole(prng, box, F)
     local ix1, ix2 = box.x1 + MARGIN, box.x2 - MARGIN
     local iz1, iz2 = box.z1 + MARGIN, box.z2 - MARGIN
@@ -356,8 +378,8 @@ local function scan_ladder_hole(prng, box, F)
     local doors = scan_door_columns(box, F)
     local y_roof_max = math.min(F + ROOF_SPAN, box.y2)
     local roof_cache = {}
-    local function roofed(hx, hz)
-        local k = hx .. "," .. hz
+    local function roofed(hx, hz, min_run)
+        local k = min_run .. "," .. hx .. "," .. hz
         local cached = roof_cache[k]
         if cached == nil then
             cached = false
@@ -366,7 +388,7 @@ local function scan_ladder_hole(prng, box, F)
                 if is_walkable(
                         minetest.get_node({x = hx, y = y, z = hz}).name) then
                     run = run + 1
-                    if run >= ROOF_MIN_RUN then
+                    if run >= min_run then
                         cached = true
                         break
                     end
@@ -422,23 +444,51 @@ local function scan_ladder_hole(prng, box, F)
         end
         return near >= 2 or any >= 1
     end
-    local function valid(hx, hz, open_zone)
+    -- Graded relaxation ladder, strictest first (see the header note):
+    -- P1/P2 are the historical passes, P3 accepts the single node
+    -- ceiling strata of the new schematics, P4 drops the enclosure
+    -- test (open plan lofts), P5 is the last resort (floor + 2 open +
+    -- door clearance only). The door clearance also relaxes from 3 to
+    -- 2 at P3: the new huts are 8-12 nodes wide, DOOR_CLEAR 3 next to
+    -- an in-wall door blanks the whole window
+    local pass_levels = {
+        {neigh = "all8", run = ROOF_MIN_RUN, enc = true,  dc = DOOR_CLEAR},
+        {neigh = "all4", run = ROOF_MIN_RUN, enc = true,  dc = DOOR_CLEAR},
+        {neigh = "one",  run = 1,            enc = true,  dc = 2},
+        {neigh = "one",  run = 1,            enc = false, dc = 2},
+        {neigh = "none", run = 0,            enc = false, dc = 2},
+    }
+    local function valid(hx, hz, lvl)
         local floor_name = minetest.get_node({x = hx, y = F, z = hz}).name
         if not is_walkable(floor_name) or is_bed_node(floor_name)
             or not is_open(minetest.get_node({x = hx, y = F + 1, z = hz}).name)
-            or not is_open(minetest.get_node({x = hx, y = F + 2, z = hz}).name)
-            or not standable(hx - 1, hz) or not standable(hx + 1, hz)
-            or not standable(hx, hz - 1) or not standable(hx, hz + 1)
-            or not roofed(hx, hz) or not enclosed(hx, hz) then
+            or not is_open(minetest.get_node({x = hx, y = F + 2, z = hz}).name) then
+            return false
+        end
+        if lvl.neigh == "all8" or lvl.neigh == "all4" then
+            if not standable(hx - 1, hz) or not standable(hx + 1, hz)
+                or not standable(hx, hz - 1) or not standable(hx, hz + 1) then
+                return false
+            end
+        elseif lvl.neigh == "one" then
+            if not (standable(hx - 1, hz) or standable(hx + 1, hz)
+                or standable(hx, hz - 1) or standable(hx, hz + 1)) then
+                return false
+            end
+        end
+        if lvl.run >= 1 and not roofed(hx, hz, lvl.run) then
+            return false
+        end
+        if lvl.enc and not enclosed(hx, hz) then
             return false
         end
         for _, d in ipairs(doors) do
             if math.max(math.abs(hx - d.x), math.abs(hz - d.z))
-                < DOOR_CLEAR then
+                < lvl.dc then
                 return false
             end
         end
-        if open_zone then
+        if lvl.neigh == "all8" then
             for dx = -1, 1 do
                 for dz = -1, 1 do
                     if (dx ~= 0 or dz ~= 0)
@@ -452,13 +502,13 @@ local function scan_ladder_hole(prng, box, F)
     end
     local sx = prng:next(0, span_x - 1)
     local sz = prng:next(0, span_z - 1)
-    for pass = 1, 2 do
+    for pass, lvl in ipairs(pass_levels) do
         for dz = 0, span_z - 1 do
             for dx = 0, span_x - 1 do
                 local hx = ix1 + (sx + dx) % span_x
                 local hz = iz1 + (sz + dz) % span_z
-                if valid(hx, hz, pass == 1) then
-                    return {x = hx, z = hz}
+                if valid(hx, hz, lvl) then
+                    return {x = hx, z = hz, pass = pass}
                 end
             end
         end
@@ -467,14 +517,18 @@ local function scan_ladder_hole(prng, box, F)
 end
 
 -- Foundation integrity guard: samples the columns of the interior
--- every 2 nodes, from F-2 down to F-25 (but never below box.y1 + 2),
--- and gives up when less than 90% of the sampled nodes are solid --
--- a house on stilts (or above a cave) has no ground to dig into.
--- "ignore" counts as non solid: un-emerged pockets abort safely
+-- every 2 nodes, from F-2 down to F-25, and gives up when less than
+-- 90% of the sampled nodes are solid -- a house on stilts (or above a
+-- cave) has no ground to dig into. F-25 covers the MAX_DEPTH = 15 dig
+-- plus a 10 node margin: with the shallow -4 embeds the dig reaches
+-- BELOW the schematic into natural ground, which is exactly what must
+-- be probed (the historical box.y1 + 2 clamp only made sense with the
+-- 30 node foundations). "ignore" counts as non solid: un-emerged
+-- pockets abort safely
 local function foundation_solid(box, F)
     local ix1, ix2 = box.x1 + MARGIN, box.x2 - MARGIN
     local iz1, iz2 = box.z1 + MARGIN, box.z2 - MARGIN
-    local y_lo = math.max(F - 25, box.y1 + 2)
+    local y_lo = F - 25
     local total, solid = 0, 0
     for x = ix1, ix2, 2 do
         for z = iz1, iz2, 2 do
@@ -679,9 +733,13 @@ function Bs.dig_basement(job, opts)
     end
     local jname = tostring(job.name or "building")
 
-    -- level count, clamped by the two depth bounds: n * (LEVEL_H + 1)
-    -- must stay <= MAX_DEPTH, and the bottom of the last slab at least
-    -- box.y1 + 2 above the bottom of the schematic box
+    -- level count, clamped by the dig depth bound: n * (LEVEL_H + 1)
+    -- must stay <= MAX_DEPTH. The historical box.y1 + 2 clamp assumed
+    -- a 30 node foundation and kept the dig inside the schematic's own
+    -- ground; the shallow -4 embeds rewrote that contract (see the
+    -- *buildings.lua data files), the dig now continues into the
+    -- NATURAL terrain below the schematic and foundation_solid()
+    -- already guarantees that ground is real and continuous
     local n = math.floor(tonumber(opts.levels) or 1)
     if n < 1 then
         n = 1
@@ -689,15 +747,6 @@ function Bs.dig_basement(job, opts)
     local max_by_depth = math.floor(MAX_DEPTH / (LEVEL_H + 1))
     if n > max_by_depth then
         n = max_by_depth
-    end
-    local max_by_box = math.floor((floor_y - (box.y1 + 2)) / (LEVEL_H + 1))
-    if n > max_by_box then
-        n = max_by_box
-    end
-    if n < 1 then
-        minetest.log("action", "[nativevillages] basement given up for "
-            .. jname .. ": not enough foundation height under the floor")
-        return false
     end
 
     -- interior footprint, margin 2 from the schematic walls
@@ -803,7 +852,7 @@ function Bs.dig_basement(job, opts)
     end
 
     -- degraded mode without any registered trapdoor node (a degenerate
-    -- game without a single doors:trapdoor*): the trapdoor column is
+    -- game without a single doors:trapdoor*): the headroom column is
     -- NOT pierced in the fill below -- its slab rows are written like
     -- any plain column, so no 1x2 hole ever opens in the house floor
     -- or the intermediate slabs; the cellar stays sealed under its
@@ -816,13 +865,14 @@ function Bs.dig_basement(job, opts)
     end
 
     -- fill: interior air, slab rows in the floor material, optional
-    -- ceiling beams and corner pillars in wood. The 1x2 shaft (trapdoor
-    -- column + ladder column) pierces EVERY intermediate slab by
-    -- construction: the fill never writes floor material, beams or
-    -- pillars on those two columns, so no pass can plug the hole again
-    -- (in the degraded mode above, the trapdoor column leaves the
-    -- shaft and keeps whole slabs); only the bottom slab stays whole
-    -- under the shaft (it is the
+    -- ceiling beams and corner pillars in wood. The 1x2 shaft (the
+    -- ladder column, which carries every trapdoor in its own axis,
+    -- plus the headroom column beside it) pierces EVERY intermediate
+    -- slab by construction: the fill never writes floor material,
+    -- beams or pillars on those two columns, so no pass can plug the
+    -- hole again (in the degraded mode above, the headroom column
+    -- leaves the shaft and keeps whole slabs); only the bottom slab
+    -- stays whole under the shaft (it is the
     -- walking floor of the last level). The support column is solid
     -- floor material from y_bot to floor_y - 1: the wall the ladder
     -- leans on
@@ -874,37 +924,108 @@ function Bs.dig_basement(job, opts)
     vm:set_data(data)
     vm:write_to_map(true)
 
-    -- 1. trapdoors: one flush with the house floor, plus one per
-    --    intermediate slab of the shaft, all CLOSED and flat over the
-    --    hole they cover: the load time resolved trapdoor_name is
-    --    paramtype2 "wallmounted", so param2 = 0 (+Y) lays it
-    --    horizontally; the old facedir values could glue it VERTICALLY
-    --    against the side of the hole (param2 2 or 3), an unplayable
-    --    wall panel
-    if trapdoor_name then
+    -- 1. floor re-close: the shaft pierces the house floor through
+    --    ONE cell only, the LADDER column -- the hatch and the
+    --    climbing column share the same cell, one single descent axis
+    --    (the historical hatch one step aside was the reported
+    --    misalignment: a hole next to the ladder, and a second almost
+    --    redundant rung column under it). The old hatch cell (the
+    --    shaft headroom, hole) is defensively re-closed at floor_y
+    --    whenever the node there is not a walkable floor (a residual
+    --    mis-calibration of floor_y would otherwise leave an open
+    --    hole beside the hatch): the refill takes the first plain
+    --    floor node read around it (fixed x-, x+, z-, z+, diagonals
+    --    order, the ladder cell skipped -- it is about to carry the
+    --    hatch), falling back to the theme floor material. With a
+    --    correctly calibrated floor_y the cell already carries the
+    --    house floor and nothing is written
+    local function nearby_floor_name()
+        local dirs = {{-1, 0}, {1, 0}, {0, -1}, {0, 1},
+            {-1, -1}, {1, 1}}
+        for _, d in ipairs(dirs) do
+            local px, pz = hole.x + d[1], hole.z + d[2]
+            if not (px == ladder.x and pz == ladder.z) then
+                local fname = minetest.get_node(
+                    {x = px, y = floor_y, z = pz}).name
+                if is_walkable(fname) and not is_furniture_or_stair(fname)
+                    and not is_bed_node(fname) then
+                    return fname
+                end
+            end
+        end
+        return floor_name
+    end
+    if not is_walkable(minetest.get_node(
+            {x = hole.x, y = floor_y, z = hole.z}).name) then
         minetest.set_node({x = hole.x, y = floor_y, z = hole.z},
-            {name = trapdoor_name, param2 = 0})
+            {name = nearby_floor_name()})
+    end
+
+    -- 2. trapdoors: one flush with the house floor, plus one per
+    --    intermediate slab of the shaft -- ALL of them on the LADDER
+    --    column, dead in the descent axis (the headroom cell beside
+    --    stays open UNDER each plate as the landing). The load time
+    --    resolved trapdoor_name is paramtype2 "facedir" in the doors
+    --    mod of this install (doors.register_trapdoor hardcodes it):
+    --    CLOSED the nodebox is a flat horizontal plate whatever
+    --    param2, and OPEN the plate swings up against the
+    --    facedir_to_dir(param2) side of the node. param2 is therefore
+    --    aimed at the SUPPORT wall: wm_to_facedir maps the support
+    --    direction (the side the ladder leans on, always solid by the
+    --    fill above) to the facedir of the same world side, so every
+    --    open plate stands flush against the bearing wall and the
+    --    headroom side stays fully clear -- aiming the plate at the
+    --    headroom would wall the landing off (the walking axis
+    --    headroom <-> hatch runs through it), a side flap would half
+    --    block it, and the bearing wall is the only edge guaranteed
+    --    solid. param2 = 0 stays the safe flat fallback for a
+    --    wallmounted trapdoor of another game (0 = +Y lays it
+    --    horizontally there)
+    local trapdoor_p2 = 0
+    local td_def = trapdoor_name
+        and minetest.registered_nodes[trapdoor_name] or nil
+    if td_def and td_def.paramtype2 == "facedir" then
+        local wm_to_facedir = {
+            [2] = 1, -- support wall at x+ -> plate stands against +X
+            [3] = 3, -- x- -> -X
+            [4] = 0, -- z+ -> +Z
+            [5] = 2, -- z- -> -Z
+        }
+        trapdoor_p2 = wm_to_facedir[ladder_wm] or 0
+    end
+    if trapdoor_name then
+        minetest.set_node({x = ladder.x, y = floor_y, z = ladder.z},
+            {name = trapdoor_name, param2 = trapdoor_p2})
         for k = 1, n - 1 do
-            minetest.set_node({x = hole.x, y = floor_y - k * (LEVEL_H + 1),
-                z = hole.z}, {name = trapdoor_name, param2 = 0})
+            minetest.set_node({x = ladder.x,
+                y = floor_y - k * (LEVEL_H + 1), z = ladder.z},
+                {name = trapdoor_name, param2 = trapdoor_p2})
         end
     end
 
-    -- 2. ladder: CONTINUOUS from the walking floor of the bottom
-    --    level (it stands on the bottom slab) up to just under the
-    --    house floor, on its OWN cell beside the trapdoor column --
-    --    never sharing a node with a trapdoor -- leaning on the
-    --    support wall (ladder_wm faces it); the intermediate slabs
-    --    were pierced around BOTH cells by the fill, so no rung is
-    --    ever missing at a slab row
+    -- 3. ladders: CONTINUOUS on the ladder column from the walking
+    --    floor of the bottom level up to floor_y - 1 -- the top rung
+    --    sits DIRECTLY under the floor hatch of the SAME cell, a
+    --    single straight climb out of the cellar (no second rung
+    --    column beside the hatch anymore) -- leaning on the support
+    --    wall (ladder_wm faces it). The intermediate slab rows of the
+    --    column carry their own trapdoor (step 2), so no rung is
+    --    written there: every slab crossing repeats the floor hatch
+    --    geometry, one rung right above and one right below the
+    --    plate. Without any trapdoor node (degraded mode) the rungs
+    --    stay continuous through the slabs instead -- the headroom
+    --    column keeps whole slabs there, a rung inside it would float
+    --    unseen
     if minetest.registered_nodes["default:ladder_wood"] then
         for y = y_bot + 1, floor_y - 1 do
-            minetest.set_node({x = ladder.x, y = y, z = ladder.z},
-                {name = "default:ladder_wood", param2 = ladder_wm})
+            if not (trapdoor_name and slab_row[y]) then
+                minetest.set_node({x = ladder.x, y = y, z = ladder.z},
+                    {name = "default:ladder_wood", param2 = ladder_wm})
+            end
         end
     end
 
-    -- 3. lighting: one wall torch every ~5 nodes along the perimeter
+    -- 4. lighting: one wall torch every ~5 nodes along the perimeter
     --    ring of each level (fixed stride, no rng draw), only on free
     --    air cells with the retained wall behind them
     local ring = build_ring(ix1, ix2, iz1, iz2)
@@ -923,7 +1044,7 @@ function Bs.dig_basement(job, opts)
         end
     end
 
-    -- 4. utility items, 2-5 per level drawn from the theme ∪ generic
+    -- 5. utility items, 2-5 per level drawn from the theme ∪ generic
     --    pool: free cells of the perimeter ring (never the ladder
     --    shaft), flush against the walls, front turned towards the
     --    interior; the ordered walk starts from a drawn origin
@@ -992,8 +1113,8 @@ function Bs.dig_basement(job, opts)
         .. tostring(job.pos and job.pos.y) .. ","
         .. tostring(job.pos and job.pos.z) .. "): " .. n .. " level(s), "
         .. floor_name .. " floors, floor y=" .. floor_y .. ", shaft at ("
-        .. hole.x .. "," .. hole.z .. "), ladder at (" .. ladder.x .. ","
-        .. ladder.z .. ")")
+        .. hole.x .. "," .. hole.z .. "), ladder/hatch at (" .. ladder.x
+        .. "," .. ladder.z .. ")")
     return true
 end
 
@@ -1066,6 +1187,11 @@ function Bs.maybe_dig_basement(job)
     -- g) calibration inputs: real floor level, free interior 1x1 spot
     local floor_y = scan_floor_y(box, FOUNDATION_OFFSET)
     if not floor_y then
+        -- [BASEMENT-DEBUG] temporary instrumentation, remove after the
+        -- in-game confirmation
+        minetest.log("warning", "[BASEMENT-DEBUG] " .. job.name .. " at ("
+            .. job.pos.x .. "," .. job.pos.y .. "," .. job.pos.z
+            .. "): scan_floor_y found no floor")
         return
     end
     local hole = scan_ladder_hole(rng, box, floor_y)
@@ -1079,6 +1205,12 @@ function Bs.maybe_dig_basement(job)
             .. "and outside cells")
         return
     end
+    -- [BASEMENT-DEBUG] temporary instrumentation, remove after the
+    -- in-game confirmation: floor level and relaxation pass elected
+    minetest.log("warning", "[BASEMENT-DEBUG] " .. job.name .. " at ("
+        .. job.pos.x .. "," .. job.pos.y .. "," .. job.pos.z
+        .. "): floor_y=" .. floor_y .. ", trapdoor spot (" .. hole.x
+        .. "," .. hole.z .. ") elected at pass P" .. tostring(hole.pass))
 
     -- h) foundation integrity: houses on stilts or above a cave give
     --    up (the cellar would hang in the air)
