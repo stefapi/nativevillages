@@ -35,7 +35,7 @@
 -- consumed in a fixed order: the chance draw, the hole scan origin
 -- (x, z), the level count, then per level the item count, the
 -- perimeter walk origin and one pool index per placed item.
---
+--e
 -- The dig itself, ONE VoxelManip for the whole cellar:
 --   * n levels of LEVEL_H = 4 interior height, one floor slab under
 --     each level, total depth n * (LEVEL_H + 1) <= MAX_DEPTH (15)
@@ -936,7 +936,7 @@ function Bs.dig_basement(job, opts)
     --    hole beside the hatch): the refill takes the first plain
     --    floor node read around it (fixed x-, x+, z-, z+, diagonals
     --    order, the ladder cell skipped -- it is about to carry the
-    --    hatch), falling back to the theme floor material. With a
+    --    hatch rung), falling back to the theme floor material. With a
     --    correctly calibrated floor_y the cell already carries the
     --    house floor and nothing is written
     local function nearby_floor_name()
@@ -961,26 +961,31 @@ function Bs.dig_basement(job, opts)
             {name = nearby_floor_name()})
     end
 
-    -- 2. trapdoors: one flush with the house floor, plus one per
-    --    intermediate slab of the shaft -- ALL of them on the LADDER
-    --    column, dead in the descent axis (the headroom cell beside
-    --    stays open UNDER each plate as the landing). The load time
-    --    resolved trapdoor_name is paramtype2 "facedir" in the doors
-    --    mod of this install (doors.register_trapdoor hardcodes it):
-    --    CLOSED the nodebox is a flat horizontal plate whatever
-    --    param2, and OPEN the plate swings up against the
-    --    facedir_to_dir(param2) side of the node. param2 is therefore
-    --    aimed at the SUPPORT wall: wm_to_facedir maps the support
-    --    direction (the side the ladder leans on, always solid by the
-    --    fill above) to the facedir of the same world side, so every
-    --    open plate stands flush against the bearing wall and the
-    --    headroom side stays fully clear -- aiming the plate at the
-    --    headroom would wall the landing off (the walking axis
-    --    headroom <-> hatch runs through it), a side flap would half
-    --    block it, and the bearing wall is the only edge guaranteed
-    --    solid. param2 = 0 stays the safe flat fallback for a
-    --    wallmounted trapdoor of another game (0 = +Y lays it
-    --    horizontally there)
+    -- 2. trapdoors, ATTACHED to the TOP of each hole: the ladder
+    --    cell keeps a full RUNG inside the hole itself (continuity
+    --    with the rung column below -- the hole stays exactly ONE
+    --    trapdoor wide, it is NOT enlarged) and the plate stands OPEN
+    --    one cell ABOVE the hole, vertical and flush against the
+    --    SUPPORT wall: the descent axis stays directly passable, one
+    --    click folds the plate flat over the hole to close it. Every
+    --    intermediate slab crossing of the shaft repeats the same
+    --    motif (rung in the slab row, open plate right above it).
+    --    The load time resolved trapdoor_name is paramtype2
+    --    "facedir" in the doors mod of this install
+    --    (doors.register_trapdoor hardcodes it): CLOSED the nodebox
+    --    is a flat horizontal plate whatever param2, and OPEN the
+    --    plate swings up against the facedir_to_dir(param2) side of
+    --    the node. param2 is therefore aimed at the SUPPORT wall:
+    --    wm_to_facedir maps the support direction (the side the
+    --    ladder leans on, always solid by the fill above) to the
+    --    facedir of the same world side, so every open plate stands
+    --    flush against the bearing wall and the headroom side stays
+    --    fully clear -- aiming the plate at the headroom would wall
+    --    the landing off (the walking axis headroom <-> hatch runs
+    --    through it), a side flap would half block it, and the
+    --    bearing wall is the only edge guaranteed solid. param2 = 0
+    --    stays the safe flat fallback for a wallmounted trapdoor of
+    --    another game (0 = +Y lays it horizontally there)
     local trapdoor_p2 = 0
     local td_def = trapdoor_name
         and minetest.registered_nodes[trapdoor_name] or nil
@@ -993,32 +998,86 @@ function Bs.dig_basement(job, opts)
         }
         trapdoor_p2 = wm_to_facedir[ladder_wm] or 0
     end
+    -- the OPEN state of a doors trapdoor is the registered
+    -- "<name>_open" node (doors.register_trapdoor registers both
+    -- states); resolved defensively, and each open plate is only
+    -- written over a FREE cell (air or buildable_to): a schematic
+    -- wall or furniture above a hole keeps its node and that hatch
+    -- falls back to the historical flat plate IN the hole
+    local trapdoor_open_name = trapdoor_name
+        and minetest.registered_nodes[trapdoor_name .. "_open"]
+        and (trapdoor_name .. "_open") or nil
+    local function hatch_cell_free(p)
+        local name = minetest.get_node(p).name
+        if name == "air" then
+            return true
+        end
+        if name == "ignore" then
+            return false
+        end
+        local def = minetest.registered_nodes[name]
+        return def ~= nil and def.buildable_to == true
+    end
+    -- ladder column cells owned by a plate: the OPEN plates below
+    -- replace the rung one cell above each hole -- climbable nodes,
+    -- the ascent stays continuous -- and the flat FALLBACK plates
+    -- sit inside the holes themselves, so step 3 writes no rung on
+    -- those cells
+    local no_rung_y = {}
+    local hatch_desc = "no trapdoor, sealed shaft"
     if trapdoor_name then
-        minetest.set_node({x = ladder.x, y = floor_y, z = ladder.z},
-            {name = trapdoor_name, param2 = trapdoor_p2})
-        for k = 1, n - 1 do
-            minetest.set_node({x = ladder.x,
-                y = floor_y - k * (LEVEL_H + 1), z = ladder.z},
+        -- floor hatch: rung in the hole, open plate above it
+        -- against the bearing wall
+        if trapdoor_open_name and hatch_cell_free(
+                {x = ladder.x, y = floor_y + 1, z = ladder.z}) then
+            minetest.set_node({x = ladder.x, y = floor_y + 1,
+                z = ladder.z},
+                {name = trapdoor_open_name, param2 = trapdoor_p2})
+            no_rung_y[floor_y + 1] = true
+            hatch_desc = "ladder in hatch, open trapdoor above"
+        else
+            minetest.set_node({x = ladder.x, y = floor_y, z = ladder.z},
                 {name = trapdoor_name, param2 = trapdoor_p2})
+            no_rung_y[floor_y] = true
+            hatch_desc = "flat plate in hatch (fallback)"
+        end
+        -- intermediate slab crossings: the same motif
+        for k = 1, n - 1 do
+            local y = floor_y - k * (LEVEL_H + 1)
+            if trapdoor_open_name and hatch_cell_free(
+                    {x = ladder.x, y = y + 1, z = ladder.z}) then
+                minetest.set_node({x = ladder.x, y = y + 1, z = ladder.z},
+                    {name = trapdoor_open_name, param2 = trapdoor_p2})
+                no_rung_y[y + 1] = true
+            else
+                minetest.set_node({x = ladder.x, y = y, z = ladder.z},
+                    {name = trapdoor_name, param2 = trapdoor_p2})
+                no_rung_y[y] = true
+            end
         end
     end
 
     -- 3. ladders: CONTINUOUS on the ladder column from the walking
-    --    floor of the bottom level up to floor_y - 1 -- the top rung
-    --    sits DIRECTLY under the floor hatch of the SAME cell, a
-    --    single straight climb out of the cellar (no second rung
-    --    column beside the hatch anymore) -- leaning on the support
-    --    wall (ladder_wm faces it). The intermediate slab rows of the
-    --    column carry their own trapdoor (step 2), so no rung is
-    --    written there: every slab crossing repeats the floor hatch
-    --    geometry, one rung right above and one right below the
-    --    plate. Without any trapdoor node (degraded mode) the rungs
-    --    stay continuous through the slabs instead -- the headroom
-    --    column keeps whole slabs there, a rung inside it would float
-    --    unseen
+    --    floor of the bottom level up to floor_y INCLUSIVE -- the
+    --    top rung sits INSIDE the floor hatch of the SAME cell,
+    --    welded to the column below and to the open plate above it,
+    --    a single straight climb out of the cellar -- leaning on the
+    --    support wall (ladder_wm faces it). no_rung_y (step 2) holds
+    --    the cells a plate owns: the OPEN plates replace the rung
+    --    one cell above each hole (climbable, the ascent stays
+    --    continuous) and the flat FALLBACK plates lie inside the
+    --    holes, every slab crossing keeping one rung right below the
+    --    hole -- and, in the open mode, one inside it. Without any
+    --    trapdoor node (degraded mode) the rungs stay continuous
+    --    through the slabs instead and the house floor cell keeps
+    --    its sealed floor node -- the headroom column keeps whole
+    --    slabs there, a rung inside it would float unseen
     if minetest.registered_nodes["default:ladder_wood"] then
-        for y = y_bot + 1, floor_y - 1 do
-            if not (trapdoor_name and slab_row[y]) then
+        if not trapdoor_name then
+            no_rung_y[floor_y] = true -- degraded: floor stays sealed
+        end
+        for y = y_bot + 1, floor_y do
+            if not no_rung_y[y] then
                 minetest.set_node({x = ladder.x, y = y, z = ladder.z},
                     {name = "default:ladder_wood", param2 = ladder_wm})
             end
@@ -1114,7 +1173,7 @@ function Bs.dig_basement(job, opts)
         .. tostring(job.pos and job.pos.z) .. "): " .. n .. " level(s), "
         .. floor_name .. " floors, floor y=" .. floor_y .. ", shaft at ("
         .. hole.x .. "," .. hole.z .. "), ladder/hatch at (" .. ladder.x
-        .. "," .. ladder.z .. ")")
+        .. "," .. ladder.z .. "), " .. hatch_desc)
     return true
 end
 
