@@ -22,7 +22,10 @@
 -- the house floor stays exactly at surface level on flat terrain. Lake
 -- schematics (anchor = "water") are based on the flooded place_on node
 -- of the lake bed (dirt/sand) with the historical y_min = y_max = -0.5
--- filter applied to it; no flatness test is applied to them.
+-- filter applied to it; the sampled footprint columns must
+-- additionally stand in a uniform water plane (open water above a bed
+-- within 1 node of the centre bed), so a lakeside puddle can no
+-- longer base a lakehouse on dry land.
 -- Site selection only READS the mapgen voxelmanip inside the callback;
 -- the actual minetest.place_schematic calls are deferred through
 -- minetest.after(0): by the next server step the generated chunk has
@@ -310,6 +313,7 @@ local air_id = minetest.get_content_id("air")
 local ignore_id = minetest.get_content_id("ignore")
 local water_ids = {}   -- known surface liquids
 local ground_ids = {}  -- category -> { [content_id] = true }
+local decor_ids = {}   -- mapgen decorations crossed by the ground scans
 local ids_ready = false
 
 local function collect_ids(names, set)
@@ -344,6 +348,30 @@ local function init_ids()
         "default:water_source", "default:river_water_source",
         "mcl_core:water_source", "mcl_core:river_water_source",
     }, water_ids)
+    -- Mapgen decoration ids (grass plants, flowers, every attachable
+    -- node the mapgen writes into the voxelmanip BEFORE on_generated
+    -- runs): the ground column scans CROSS them instead of dying on
+    -- the first non air node, so a vegetated plain still accepts its
+    -- houses (a terrain with ~20% decorated columns used to reject
+    -- every sampled column, hence every site). A node is a decoration
+    -- when it is not walkable or belongs to one of the decoration
+    -- families; air and the surface liquids stay out of the set, they
+    -- keep their own skip/rejection logic below. Built ONCE here, no
+    -- get_content_id ever runs in the per column hot loops
+    for name, def in pairs(minetest.registered_nodes) do
+        local id = minetest.get_content_id(name)
+        if id ~= air_id and id ~= ignore_id and not water_ids[id] then
+            local groups = def.groups or {}
+            if groups.liquid then
+                -- unknown liquid of a third party mod: never crossed,
+                -- the strict shore protection keeps rejecting it
+            elseif def.walkable == false or groups.snappy or groups.flower
+                or groups.flora or groups.grass or groups.attached_node
+                or groups.plant then
+                decor_ids[id] = true
+            end
+        end
+    end
     -- dimension grounds (dimension_support.lua): every eligible
     -- multidimensions dimension injects its NUMERIC ground content
     -- ids into the category sets here, so a building sharing a
@@ -629,15 +657,21 @@ local function vm_top_node(va, data, yfloor, x, z, top)
 end
 
 -- Ground node height of a column, or nil when the site must be
--- rejected: the first non-air node has to be an acceptable ground node
+-- rejected: the first SOLID node has to be an acceptable ground node
 -- (the historical place_on contract: a tree, a building or a wrong
--- surface node on top rejects the site). Water anchored schematics
--- skip the liquid column down to the lake bed instead
+-- surface node on top rejects the site). Mapgen decorations (grass
+-- plants, flowers...) already sit in the voxelmanip when the callback
+-- runs and are crossed instead of rejected: a vegetated column anchors
+-- on the solid node below the plant. Water stays an immediate reject
+-- for land anchored schematics (shore/berge protection), water
+-- anchored ones skip the liquid column down to the lake bed instead
 local function vm_ground_height(va, data, yfloor, x, z, ground_set, skip_liquids, top)
     for y = top, yfloor, -1 do
         local id = data[va:index(x, y, z)]
         if id ~= air_id and id ~= ignore_id then
-            if skip_liquids and water_ids[id] then
+            if decor_ids[id] then
+                -- decoration node: cross it, the ground stands below
+            elseif skip_liquids and water_ids[id] then
                 -- keep scanning through the water column
             elseif ground_set[id] then
                 return y
@@ -974,7 +1008,10 @@ local function try_at(ctx)
             -- schematic on it, the y_min/y_max = -0.5 filter
             -- selecting beds at y = -1 exactly. The centre column
             -- must be flooded open water of an acceptable biome
-            -- (the historical biomes= filter) above that bed.
+            -- (the historical biomes= filter) above that bed, and
+            -- every sampled column of the footprint repeats the same
+            -- water+bed test within ±1 node of the centre bed (the
+            -- uniform water plane test below).
             -- relax_altitude never widens these bands: the lake
             -- schematics are built for a bed one node under the
             -- water surface, a deeper bed would drown them.
@@ -995,41 +1032,84 @@ local function try_at(ctx)
                     ctx.stats.draw_biome = ctx.stats.draw_biome + 1
                 else
                     local c = bed_y + 0.5
-                    if c >= def.y_min and c <= def.y_max then
-                        -- 3x3 biome sampling of the real (rotated)
-                        -- footprint at the constant bed height: no
-                        -- extra column scan, a lake bed has no
-                        -- vertical biome boundary to care about. A
-                        -- grid point fallen on an emerged shore
-                        -- votes a land biome, filtered out at
-                        -- election time below
-                        local votes = {}
-                        for i = 0, 2 do
-                            for j = 0, 2 do
-                                local sx = px + math.floor((w - 1) * i / 2)
-                                local sz = pz + math.floor((d - 1) * j / 2)
-                                votes[#votes + 1] = biome_name_at(sx, bed_y, sz)
+                    if c < def.y_min or c > def.y_max then
+                        ctx.stats.draw_alt = ctx.stats.draw_alt + 1
+                    else
+                        -- uniform water plane over EVERY sampled column
+                        -- of the real (rotated) footprint (one column
+                        -- every 4 nodes plus the final edge, the very
+                        -- grid the ground branch samples for its
+                        -- flatness test): each column must show open
+                        -- water at its surface and an acceptable bed
+                        -- within ±1 node of the centre bed, the same
+                        -- water+bed test the centre column just passed.
+                        -- A two node puddle on a shore used to be
+                        -- enough to base a lakehouse mostly on dry
+                        -- land; a real lake is a uniform plane, a
+                        -- shore is not
+                        local uniform = true
+                        for gx = 0, math.ceil((w - 1) / 4) do
+                            local sx = px + math.min(gx * 4, w - 1)
+                            for gz = 0, math.ceil((d - 1) / 4) do
+                                local sz = pz + math.min(gz * 4, d - 1)
+                                local ty, tid = vm_top_node(ctx.va, ctx.data,
+                                    ctx.yfloor, sx, sz, ctx.top)
+                                if not ty or not water_ids[tid] then
+                                    uniform = false -- emerged column
+                                    break
+                                end
+                                local by = vm_ground_height(ctx.va, ctx.data,
+                                    ctx.yfloor, sx, sz, ground_set, true, ty)
+                                if not by or math.abs(by - bed_y) > 1 then
+                                    uniform = false -- bed out of the plane
+                                    break
+                                end
+                            end
+                            if not uniform then
+                                break
                             end
                         end
-                        -- votes filtered on the accepted biome set:
-                        -- a lake building can only elect a bed biome
-                        -- (sand/dirt node_top), never a land one
-                        -- (grass under water); ties and fallback go
-                        -- to the bed anchor
-                        local elected = Soil.elect(votes, bed_biome, def.biome_set)
-                        if debug_placement and elected ~= bed_biome then
-                            minetest.log("action", "[nativevillages] soil biome "
-                                .. "elected " .. tostring(elected) .. " over anchor "
-                                .. tostring(bed_biome) .. " for " .. def.name)
+                        if not uniform then
+                            -- open water test failed: reject this
+                            -- drawing, the bounded redraws may still
+                            -- fit another (smaller) one on the site
+                            ctx.stats.draw_water = ctx.stats.draw_water + 1
+                        else
+                            -- 3x3 biome sampling of the real (rotated)
+                            -- footprint at the constant bed height: no
+                            -- extra column scan, a lake bed has no
+                            -- vertical biome boundary to care about. A
+                            -- grid point fallen on an emerged shore
+                            -- votes a land biome, filtered out at
+                            -- election time below (the uniformity test
+                            -- above already rejected the emerged sites)
+                            local votes = {}
+                            for i = 0, 2 do
+                                for j = 0, 2 do
+                                    local sx = px + math.floor((w - 1) * i / 2)
+                                    local sz = pz + math.floor((d - 1) * j / 2)
+                                    votes[#votes + 1] = biome_name_at(sx, bed_y, sz)
+                                end
+                            end
+                            -- votes filtered on the accepted biome set:
+                            -- a lake building can only elect a bed biome
+                            -- (sand/dirt node_top), never a land one
+                            -- (grass under water); ties and fallback go
+                            -- to the bed anchor
+                            local elected = Soil.elect(votes, bed_biome, def.biome_set)
+                            if debug_placement and elected ~= bed_biome then
+                                minetest.log("action", "[nativevillages] soil biome "
+                                    .. "elected " .. tostring(elected) .. " over anchor "
+                                    .. tostring(bed_biome) .. " for " .. def.name)
+                            end
+                            -- cheap AABB anti-collision test, then
+                            -- queue the accepted footprint; the job
+                            -- carries the ELECTED biome, the bed anchor
+                            -- biome only decided the ties
+                            return accept_site_ctx(ctx, def, rot, px, pz,
+                                bed_y + def.offset, w, d, size, elected)
                         end
-                        -- cheap AABB anti-collision test, then
-                        -- queue the accepted footprint; the job
-                        -- carries the ELECTED biome, the bed anchor
-                        -- biome only decided the ties
-                        return accept_site_ctx(ctx, def, rot, px, pz,
-                            bed_y + def.offset, w, d, size, elected)
                     end
-                    ctx.stats.draw_alt = ctx.stats.draw_alt + 1
                 end
             end
             -- wrong site for this drawing, try another drawing
@@ -1102,8 +1182,11 @@ local function try_at(ctx)
                         y_hi = y_hi + RELAX_UP
                     end
                     if c >= y_lo and c <= y_hi then
-                        -- flatness test over the whole footprint (3x3
-                        -- grid: corners, edge midpoints, centre).
+                        -- flatness test over the whole footprint (dense
+                        -- grid: one column every 4 nodes plus the final
+                        -- edge; the old 3x3 corners/midpoints/centre
+                        -- grid left gaps up to ~8 nodes where water or
+                        -- sand slipped through unseen).
                         -- Swampy drawings compare the FIRST non air
                         -- node of each column (the water surface of a
                         -- flooded swamp or the top of a mud island):
@@ -1113,15 +1196,32 @@ local function try_at(ctx)
                         -- (run H logs), while the water surface is
                         -- what a stilt house actually stands over
                         local flat = true
-                        for i = 0, 2 do
-                            for j = 0, 2 do
-                                local sx = px + math.floor((w - 1) * i / 2)
-                                local sz = pz + math.floor((d - 1) * j / 2)
+                        local wet = false
+                        local pts = {} -- sampled columns for the vote below
+                        for gx = 0, math.ceil((w - 1) / 4) do
+                            local sx = px + math.min(gx * 4, w - 1)
+                            for gz = 0, math.ceil((d - 1) / 4) do
+                                local sz = pz + math.min(gz * 4, d - 1)
                                 local sy
                                 if swampy then
                                     sy = vm_top_node(ctx.va, ctx.data,
                                         ctx.yfloor, sx, sz, ctx.top)
                                 else
+                                    -- land anchored drawing: a sampled
+                                    -- column whose FIRST non air node is
+                                    -- water rejects the site outright;
+                                    -- the old sparse grid let a shore
+                                    -- channel or a flooded dip carry a
+                                    -- grassland house (swampy drawings
+                                    -- keep skipping their shallow water:
+                                    -- a stilt house stands over it)
+                                    local ty, tid = vm_top_node(ctx.va,
+                                        ctx.data, ctx.yfloor, sx, sz, ctx.top)
+                                    if ty and water_ids[tid] then
+                                        flat = false
+                                        wet = true
+                                        break
+                                    end
                                     sy = vm_ground_height(ctx.va, ctx.data,
                                         ctx.yfloor, sx, sz, ground_set, false,
                                         ctx.top)
@@ -1130,35 +1230,29 @@ local function try_at(ctx)
                                     flat = false -- too steep, cliff...
                                     break
                                 end
+                                pts[#pts + 1] = {sx, sy, sz}
                             end
                             if not flat then
                                 break
                             end
                         end
                         if flat then
-                            -- 3x3 biome sampling on the same grid
-                            -- positions as the flatness test above,
-                            -- measured at the real surface of each
-                            -- point (the biome also varies vertically);
-                            -- swampy sites sample the water or island
-                            -- surface, their flatness reference. Runs
-                            -- only on flat accepted candidates: a
-                            -- rejected site pays no vote
+                            -- biome vote on the very columns the
+                            -- flatness test sampled above, measured at
+                            -- the real surface of each point (the biome
+                            -- also varies vertically); swampy sites
+                            -- voted on the water or island surface,
+                            -- their flatness reference. Runs only on
+                            -- flat accepted candidates: a rejected site
+                            -- pays no vote. An unmeasurable point
+                            -- contributes no entry (S.elect contract,
+                            -- no nil hole in the vote list)
                             local votes = {}
-                            for i = 0, 2 do
-                                for j = 0, 2 do
-                                    local sx = px + math.floor((w - 1) * i / 2)
-                                    local sz = pz + math.floor((d - 1) * j / 2)
-                                    local sy
-                                    if swampy then
-                                        sy = vm_top_node(ctx.va, ctx.data,
-                                            ctx.yfloor, sx, sz, ctx.top)
-                                    else
-                                        sy = vm_ground_height(ctx.va, ctx.data,
-                                            ctx.yfloor, sx, sz, ground_set,
-                                            false, ctx.top)
-                                    end
-                                    votes[#votes + 1] = sy and biome_name_at(sx, sy, sz) or nil
+                            for k = 1, #pts do
+                                local bn = biome_name_at(pts[k][1], pts[k][2],
+                                    pts[k][3])
+                                if bn then
+                                    votes[#votes + 1] = bn
                                 end
                             end
                             -- open vote: the ground follows the biome
@@ -1182,12 +1276,25 @@ local function try_at(ctx)
                             return accept_site_ctx(ctx, def, rot, px, pz,
                                 surface_y + def.offset, w, d, size, elected)
                         end
-                        ctx.stats.not_flat = ctx.stats.not_flat + 1
-                        if debug_placement then
-                            minetest.log("action", "[nativevillages] site REJECTED "
-                                .. def.name .. " at (" .. px .. "," .. gy .. ","
-                                .. pz .. "): ground not flat enough (diff > "
-                                .. max_ground_diff .. ")")
+                        if wet then
+                            -- open water on the footprint of a land
+                            -- anchored drawing: counted through the
+                            -- open_water draw counter, like the water
+                            -- branch failures
+                            ctx.stats.draw_water = ctx.stats.draw_water + 1
+                            if debug_placement then
+                                minetest.log("action", "[nativevillages] site REJECTED "
+                                    .. def.name .. " at (" .. px .. "," .. gy .. ","
+                                    .. pz .. "): open water column on the footprint")
+                            end
+                        else
+                            ctx.stats.not_flat = ctx.stats.not_flat + 1
+                            if debug_placement then
+                                minetest.log("action", "[nativevillages] site REJECTED "
+                                    .. def.name .. " at (" .. px .. "," .. gy .. ","
+                                    .. pz .. "): ground not flat enough (diff > "
+                                    .. max_ground_diff .. ")")
+                            end
                         end
                         if not ctx.slot then
                             -- scattered site: right drawing, bad ground

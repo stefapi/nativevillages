@@ -17,16 +17,51 @@ local categories = {
 }
 
 -- Variant suffixes automatically appended to every declared root biome
--- (a variant is only added when it is actually registered)
+-- (a variant is only added when it is actually registered). The
+-- littoral suffixes (_shore/_ocean/_dunes/_beach) are reserved to the
+-- water categories (see land_cats below): a land category claiming a
+-- shore or ocean biome used to accept its sandy node_top as ground,
+-- which pulled land buildings onto sea coasts (grassland_ocean
+-- node_top being default:sand). Explicitly DECLARED names in the
+-- fallback/known_mods tables below (mangrove_shore, mesa_beach ...)
+-- keep being honoured: only the automatic expansion is restricted
 local variants = {"_shore", "_ocean", "_under", "_dunes", "_beach"}
+
+-- Categories whose buildings stand on dry land: for them the automatic
+-- littoral expansion of add_with_variants AND the generic biome scan
+-- below are disabled, so a land category can never claim a
+-- _shore/_ocean/_dunes/_beach biome. lake keeps them by design
+-- (minetest_game has no dedicated lake biome, its lake buildings spawn
+-- on ocean shores), swamp hosts stilt houses on flooded shores, and
+-- the arctic fallback still declares icesheet_ocean/tundra_ocean
+-- explicitly: their frozen surface (snowblock node_top) is walkable
+-- land for the sledges, not open water
+local land_cats = {
+    grassland = true, forest = true, jungle = true,
+    savanna = true, desert = true, arctic = true,
+}
+
+-- True when a (lowercase) biome name ends with a littoral variant suffix
+local function ends_with_littoral(lower)
+    for v = 1, #variants do
+        local suffix = variants[v]
+        if lower:sub(-#suffix) == suffix then
+            return true
+        end
+    end
+    return false
+end
 
 -- Layer 0: guaranteed minetest_game fallbacks. Always kept, never replaced:
 -- the mod works even without any optional biome mod installed.
 local fallback = {
-    grassland = {"grassland", "grassland_dunes", "snowy_grassland"},
-    forest = {"deciduous_forest"}, -- + _shore/_ocean via variant expansion
+    -- grassland_dunes deliberately absent: a coastal dunes biome is a
+    -- sand shore, grassland buildings have no business there (the
+    -- deciduous_forest/savanna shores are covered by the lake category)
+    grassland = {"grassland", "snowy_grassland"},
+    forest = {"deciduous_forest"},
     jungle = {"rainforest", "rainforest_swamp"},
-    savanna = {"savanna"}, -- + _shore via variant expansion
+    savanna = {"savanna"},
     desert = {"desert", "sandstone_desert", "cold_desert"},
     arctic = {"icesheet", "icesheet_ocean", "tundra", "tundra_ocean", "tundra_highland"},
     lake = {"deciduous_forest_ocean", "deciduous_forest_shore", "coniferous_forest_ocean", "grassland_ocean"},
@@ -163,9 +198,16 @@ local function resolve()
         end
 
         -- a declared root biome plus its registered _shore/_ocean/_under/
-        -- _dunes/_beach declinations
+        -- _dunes/_beach declinations. The littoral expansion is applied
+        -- to the water categories only: a land category (land_cats)
+        -- takes its declared biomes as is, so grassland, savanna, ...
+        -- can never claim grassland_ocean, savanna_shore and friends
+        local expand_littoral = not land_cats[cat]
         local function add_with_variants(root)
             add(root)
+            if not expand_littoral then
+                return
+            end
             for v = 1, #variants do
                 local name = root .. variants[v]
                 if registered[name] then
@@ -188,15 +230,21 @@ local function resolve()
             end
         end
 
-        -- Layer 2: generic scan of all registered biomes
+        -- Layer 2: generic scan of all registered biomes. The littoral
+        -- suffixed names are skipped for the land categories here too:
+        -- grassland_ocean contains "grass" and would otherwise be
+        -- scanned straight back into the grassland category
+        local littoral_ok = not land_cats[cat]
         for name in pairs(registered) do
             local lower = string.lower(name)
-            for p = 1, #scan_patterns do
-                if string.find(lower, scan_patterns[p][1], 1, true) then
-                    if scan_patterns[p][2] == cat then
-                        add(name)
+            if littoral_ok or not ends_with_littoral(lower) then
+                for p = 1, #scan_patterns do
+                    if string.find(lower, scan_patterns[p][1], 1, true) then
+                        if scan_patterns[p][2] == cat then
+                            add(name)
+                        end
+                        break -- first matching pattern classifies the biome
                     end
-                    break -- first matching pattern classifies the biome
                 end
             end
         end
