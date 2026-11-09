@@ -49,8 +49,11 @@
 --e
 -- The dig itself, ONE VoxelManip for the whole cellar:
 --   * n levels of LEVEL_H = 4 interior height, one floor slab under
---     each level, total depth n * (LEVEL_H + 1) <= MAX_DEPTH (15)
---     nodes, dug through the shallow schematic embed into the natural
+--     each level, total depth BUFFER + n * (LEVEL_H + 1) <= MAX_DEPTH
+--     (16) nodes -- the BUFFER row is a solid retained stratum right
+--     under the house floor (pierced by the 1x2 shaft only), the
+--     cellar headroom starts BELOW it; dug through the shallow
+--     schematic embed into the natural
 --     ground below; the XZ footprint is the interior
 --     rectangle of the house, margin 2 from the schematic walls (at
 --     least 2 nodes of retained ground all around)
@@ -257,6 +260,22 @@ local furniture_prefixes = {
     -- has no open node above), so the scan slides to a clear probe
     -- column of the +/-2 ring
     "wool:", "carpets:",
+    -- third party furniture families of the imported residential
+    -- schematics (2026-11-09 report "the ground is sometimes destroyed,
+    -- giving direct access to the cellar"; [BASEMENT-DEBUG] logs:
+    -- grasslandhut_2 elected cottages:wood_flat STANDING ON a
+    -- cottages:table as its "floor", another house elected
+    -- moreblocks:stair_acacia_wood): none of those families is ever a
+    -- floor stratum in the schematics of this mod, while their tables,
+    -- shelves, workbenches and stairs are walkable and passed the raw
+    -- tests -- floor_y one node too high, the fill digging the REAL
+    -- floor row away over the whole interior. moreblocks:slab_* stays
+    -- DELIBERATELY unfiltered: the same logs elected
+    -- moreblocks:slab_wood with default:dirt DIRECTLY below (a real
+    -- slab floor laid on grade, lumberjack_3), filtering it would have
+    -- blanked every column of the slab floored houses
+    "cottages:", "xdecor:", "darkage:",
+    "moreblocks:stair_", "moretrees:stair_", "colorful_beds:",
 }
 
 local function is_furniture_or_stair(name)
@@ -304,7 +323,15 @@ local trapdoor_warned = false
 --
 
 local LEVEL_H = 4       -- interior height of one level
-local MAX_DEPTH = 15    -- total dig depth bound (n * (LEVEL_H + 1))
+local BUFFER = 1        -- retained ground row kept SOLID just under the
+                        -- house floor, pierced by the 1x2 shaft only
+                        -- (2026-11-09 report "the ground is sometimes
+                        -- destroyed, giving direct access to the cellar":
+                        -- a floor_y calibrated one node too high made the
+                        -- fill rewrite the REAL floor row; even with the
+                        -- furniture filter above, one extra solid row now
+                        -- always seals the cellar from the house floor)
+local MAX_DEPTH = 16    -- total dig depth bound (BUFFER + n*(LEVEL_H+1))
 local MARGIN = 2        -- margin from the schematic walls
 local SOLID_RATIO = 0.9 -- foundation integrity threshold
 local FOUNDATION_OFFSET = -4 -- _30_ schematics anchor at -4 (shallow
@@ -645,8 +672,8 @@ end
 -- Foundation integrity guard: samples the columns of the interior
 -- every 2 nodes, from F-2 down to F-25, and gives up when less than
 -- 90% of the sampled nodes are solid -- a house on stilts (or above a
--- cave) has no ground to dig into. F-25 covers the MAX_DEPTH = 15 dig
--- plus a 10 node margin: with the shallow -4 embeds the dig reaches
+-- cave) has no ground to dig into. F-25 covers the MAX_DEPTH = 16 dig
+-- plus a 9 node margin: with the shallow -4 embeds the dig reaches
 -- BELOW the schematic into natural ground, which is exactly what must
 -- be probed (the historical box.y1 + 2 clamp only made sense with the
 -- 30 node foundations). "ignore" counts as non solid: un-emerged
@@ -870,7 +897,7 @@ function Bs.dig_basement(job, opts)
     if n < 1 then
         n = 1
     end
-    local max_by_depth = math.floor(MAX_DEPTH / (LEVEL_H + 1))
+    local max_by_depth = math.floor((MAX_DEPTH - BUFFER) / (LEVEL_H + 1))
     if n > max_by_depth then
         n = max_by_depth
     end
@@ -883,18 +910,23 @@ function Bs.dig_basement(job, opts)
             .. jname .. ": interior too small")
         return false
     end
-    local y_bot = floor_y - n * (LEVEL_H + 1)
+    -- base = floor_y - BUFFER: the row AT base is a retained solid
+    -- stratum right under the house floor (see the buf branch of the
+    -- fill, BUFFER), the CELLAR headroom starts one row below it and
+    -- every level geometry below is measured from base
+    local base = floor_y - BUFFER
+    local y_bot = base - n * (LEVEL_H + 1)
 
     -- level geometry: the interior rows of level k run from
-    --   floor_y - (k-1)*(LEVEL_H+1) - 1   (ceiling, under the slab above)
+    --   base - (k-1)*(LEVEL_H+1) - 1   (ceiling, under the slab above)
     -- down to
-    --   floor_y - (k-1)*(LEVEL_H+1) - LEVEL_H
-    -- and its floor slab row is floor_y - k*(LEVEL_H+1); y_bot is the
+    --   base - (k-1)*(LEVEL_H+1) - LEVEL_H
+    -- and its floor slab row is base - k*(LEVEL_H+1); y_bot is the
     -- slab row of the bottom level n
     local slab_row, ceiling_row = {}, {}
     for k = 1, n do
-        slab_row[floor_y - k * (LEVEL_H + 1)] = true
-        ceiling_row[floor_y - (k - 1) * (LEVEL_H + 1) - 1] = true
+        slab_row[base - k * (LEVEL_H + 1)] = true
+        ceiling_row[base - (k - 1) * (LEVEL_H + 1) - 1] = true
     end
 
     -- materials
@@ -1046,6 +1078,14 @@ function Bs.dig_basement(job, opts)
                     else
                         data[vi] = c_air
                     end
+                elseif y == base then
+                    -- retained buffer row (see BUFFER): solid floor
+                    -- material everywhere under the house floor, the
+                    -- is_shaft branch above already pierced it for the
+                    -- 1x2 shaft (ladder + headroom) ONLY -- a residual
+                    -- floor_y miscalibration can no longer open the
+                    -- whole ground onto the cellar
+                    data[vi] = c_floor
                 elseif slab_row[y] then
                     data[vi] = c_floor
                 elseif c_wood and ceiling_row[y] and (
@@ -1195,7 +1235,7 @@ function Bs.dig_basement(job, opts)
         end
         -- intermediate slab crossings: the same motif
         for k = 1, n - 1 do
-            local y = floor_y - k * (LEVEL_H + 1)
+            local y = base - k * (LEVEL_H + 1)
             if trapdoor_open_name and hatch_cell_free(
                     {x = ladder.x, y = y + 1, z = ladder.z}) then
                 minetest.set_node({x = ladder.x, y = y + 1, z = ladder.z},
@@ -1242,7 +1282,7 @@ function Bs.dig_basement(job, opts)
     local ring = build_ring(ix1, ix2, iz1, iz2)
     if minetest.registered_nodes["default:torch_wall"] then
         for k = 1, n do
-            local y = floor_y - k * (LEVEL_H + 1) + 2 -- waist height
+            local y = base - k * (LEVEL_H + 1) + 2 -- waist height
             for i, cell in ipairs(ring) do
                 if i % 5 == 2 and not is_shaft(cell.x, cell.z) then
                     local p = {x = cell.x, y = y, z = cell.z}
@@ -1294,7 +1334,7 @@ function Bs.dig_basement(job, opts)
     end
     if #pool > 0 and #ring > 0 then
         for k = 1, n do
-            local fy = floor_y - k * (LEVEL_H + 1) -- slab row: item floor
+            local fy = base - k * (LEVEL_H + 1) -- slab row: item floor
             local count = rng:next(2, 5)
             local start = rng:next(0, #ring - 1)
             for j = 0, #ring - 1 do
@@ -1410,11 +1450,6 @@ function Bs.maybe_dig_basement(job)
     -- g) calibration inputs: real floor level, free interior 1x1 spot
     local floor_y = scan_floor_y(box, FOUNDATION_OFFSET)
     if not floor_y then
-        -- [BASEMENT-DEBUG] temporary instrumentation, remove after the
-        -- in-game confirmation
-        minetest.log("warning", "[BASEMENT-DEBUG] " .. job.name .. " at ("
-            .. job.pos.x .. "," .. job.pos.y .. "," .. job.pos.z
-            .. "): scan_floor_y found no floor")
         return
     end
     local hole = scan_ladder_hole(rng, box, floor_y)
@@ -1428,12 +1463,6 @@ function Bs.maybe_dig_basement(job)
             .. "and outside cells")
         return
     end
-    -- [BASEMENT-DEBUG] temporary instrumentation, remove after the
-    -- in-game confirmation: floor level and relaxation pass elected
-    minetest.log("warning", "[BASEMENT-DEBUG] " .. job.name .. " at ("
-        .. job.pos.x .. "," .. job.pos.y .. "," .. job.pos.z
-        .. "): floor_y=" .. floor_y .. ", trapdoor spot (" .. hole.x
-        .. "," .. hole.z .. ") elected at pass P" .. tostring(hole.pass))
 
     -- h) foundation integrity: houses on stilts or above a cave give
     --    up (the cellar would hang in the air)

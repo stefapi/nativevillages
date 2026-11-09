@@ -331,10 +331,13 @@ nativevillages.basement_chance (Native Villages basement chance) float 0.35 0.0 
 nativevillages.basement_levels_min (Native Villages basement levels min) int 1 1 3
 
 # Maximum number of levels of the basements (see nativevillages.
-# basements); the real depth is further bounded by the 15 node dig
-# limit and the available foundation height under the house
+# basements); the real depth is further bounded by the 16 node dig
+# limit (which includes the 1 node solid buffer row kept right under
+# the house floor, pierced by the ladder shaft only) and the available
+# foundation height under the house
 # Nombre maximal de niveaux des sous-sols (voir nativevillages.
 # basements) ; la profondeur réelle est en outre bornée par la limite
-# de creusement de 15 nodes et la hauteur de fondation disponible sous
-# la maison
+# de creusement de 16 nodes (elle comprend la rangée tampon solide
+# conservée juste sous le plancher, percée par le seul puits
+# d'échelle) et la hauteur de fondation disponible sous la maison
 nativevillages.basement_levels_max (Native Villages basement levels max) int 3 1 8
