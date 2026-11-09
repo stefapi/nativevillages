@@ -5,19 +5,22 @@
 -- by ONE cell only (the ladder column), dug levels with floor slabs,
 -- wall torches, wood pillars and a few utility items per level.
 --
--- Scope and guards (mirrors the dungeon_entrances.lua conventions):
---   * eligible houses ONLY: the house name prefixes (grasslandhouse,
---     deserthouse, savannahouse, icehouse, junglehouse and the defensive
---     cannibalhouse: the jungle houses register as junglehouse1-3
---     although their schematic files are named cannibalhouse*) -- every
---     house family of the *buildings.lua files now anchors at the
---     shallow offset = -4 (the _30_ tribal families and the imported
---     house_1_0/house_medieval_fancy/house_with_garden ones alike),
---     their embed leaves the dig to the natural ground below, and the
---     historical "_30_" schematic NAME test was retired on 2026-10-15
---     (it stole 27% of the placed house sites, see maybe_dig_basement);
---     the prefixes alone exclude every civic building, and the water
---     anchored lake houses a second time
+-- Scope and guards:
+--   * RESIDENTIAL houses only, through the widened prefix families of
+--     the 2026-11-09 audit (user report: basements nearly never spawn
+--     even at chance 1 -- the historical six tribal prefixes covered
+--     but 9.4% of the grassland drawing weight): grasslandhouse,
+--     deserthouse, savannahouse, icehouse, junglehouse, cannibalhouse
+--     PLUS the residential imported families (grasslandlogcabin*,
+--     grasslandlumberjack_* dwellings, grasslandhut, grasslandtown_house*,
+--     grasslandtaverne*, grasslandinn*, grasslandsmall_house,
+--     grasslandshed), every one of them anchored at the shallow
+--     offset = -4 embed (verified on the *buildings.lua data files,
+--     beds audit on the .mts). An explicit civic blacklist (churches,
+--     forges, sawmill, school, stables, farms, trader stalls, towers,
+--     hochsitz, pubs, hotels, mills...) keeps the civic drawings out;
+--     the water anchored lake houses never match any prefix, a second
+--     guard
 --   * the "_cloudlands" buildings are REJECTED: a floating island has
 --     nothing solid under the floor, while the multidimensions
 --     buildings stay eligible (their deferred fragments place real
@@ -27,8 +30,11 @@
 --     replayed locally -- same world seed stream, same chance setting
 --     read a second time (the dimension_support.lua precedent of
 --     duplicating a setting read rather than widening an interface) --
---     and when the house carries a dungeon the basement gives up: a
---     house never carries both
+--     but ONLY for the houses that module can actually draw (the
+--     "_30_" schematic name guard of dungeon_entrances.lua; replaying
+--     a non _30_ house stole 20% of its basements for a dungeon it
+--     could never carry). When the house carries a dungeon the
+--     basement gives up: a house never carries both
 --
 -- Determinism: the draw stream is PcgRandom(BASE_SEED, box.x1, box.y1,
 -- box.z1) with BASE_SEED = 0xBA5E4E7 + world seed (leetspeak of
@@ -138,15 +144,73 @@ local rd_enabled = minetest.settings:get_bool(
 local rd_chance = clamp(tonumber(minetest.settings:get(
     "nativevillages.randungeon_entrance_chance") or "") or 0.2, 0.0, 1.0)
 
--- Registered names of the eligible houses (dungeon_entrances.lua
--- convention: the jungle houses register as junglehouse1-3 although
--- their schematic FILES are named cannibalhouse*)
+-- Registered names of the eligible houses. TWO lists:
+--   * house_prefixes: the historical six tribal families plus the
+--     RESIDENTIAL families of the imported schematics, all anchored at
+--     the shallow offset = -4 embed (logcabin*, lumberjack_* dwellings,
+--     hut_*, town_house*, taverne_*, inn_*, small_house* — verified
+--     against the *buildings.lua data files: every one of them carries
+--     offset = -4, and a beds audit on the .mts confirms they are
+--     homes). The jungle houses register as junglehouse1-3 although
+--     their schematic FILES are named cannibalhouse*
+--   * civic_names / civic_prefixes: explicit blacklist of the civic and
+--     non residential drawings that the widened prefixes above would
+--     otherwise admit. Names win over prefixes, so a future residential
+--     entry can stay listed here verbatim while its family joins
+--     house_prefixes
+-- The 2026-11-09 audit (user report: basements nearly never spawn even
+-- at chance 1): the historical six prefixes covered only 9.4% of the
+-- grassland drawing weight (the logcabin/lumberjack/town_house/taverne
+-- residential pool dominates), so a basement chance of 1 gave ~0.09
+-- basement per grassland building: the eligibility gate, not the
+-- chance, was the bottleneck
 local house_prefixes = {
     "grasslandhouse", "deserthouse", "savannahouse",
     "icehouse", "junglehouse", "cannibalhouse",
+    "grasslandlogcabin", "grasslandlumberjack", "grasslandhut",
+    "grasslandtown_house", "grasslandtaverne", "grasslandinn",
+    "grasslandsmall_house", "grasslandshed",
+}
+local civic_names = {
+    -- pure civic/industry drawings of the data files, never a home
+    -- (beds audit on the .mts: the residential families all carry
+    -- beds, these carry none or machinery instead)
+    "grasslandchurch1", "grasslandchurch2", "grasslandchurch_1_0",
+    "grasslandchurch_1", "grasslandlumberjack_church_1",
+    "grasslandforge", "grasslandforge_1", "grasslandforge_1_0",
+    "grasslandlumberjack_sawmill_1", "grasslandlumberjack_school",
+    "grasslandlumberjack_stable", "grasslandstable",
+    "grasslandpond", "grasslandblot", "grasslandtower_1_0",
+    "grasslandtown_tower", "grasslandhochsitz_1", "grasslandhochsitz_2",
+    "grasslandhochsitz_3", "grasslandhochsitz_4",
+    "grasslandlumberjack_hotel_1", "grasslandlumberjack_pub_1",
+    "grasslandlogcabinpub1", "grasslandlogcabinpub2",
+    "grasslandlogcabinpub3", "grasslandmill_1",
+    "grasslandwatermill_1", "grasslandpub_1_0",
+    "grasslandshed_with_forge_v2_1_0",
+}
+local civic_prefixes = {
+    "grasslandfarm",      -- farms: work buildings, not homes
+    "grasslandtrader",    -- clay trading stalls, open air
 }
 
+local civic_set = {}
+for _, n in ipairs(civic_names) do
+    civic_set[n] = true
+end
+
+-- Eligibility test: a widened residential prefix AND not blacklisted
+-- (exact names first, then the civic prefixes). grasslandhut_1/_2 DO
+-- carry beds and pass every scan: residential, they stay eligible
 local function is_house(name)
+    if civic_set[name] then
+        return false
+    end
+    for _, prefix in ipairs(civic_prefixes) do
+        if name:sub(1, #prefix) == prefix then
+            return false
+        end
+    end
     for _, prefix in ipairs(house_prefixes) do
         if name:sub(1, #prefix) == prefix then
             return true
@@ -277,12 +341,27 @@ local function scan_floor_y(box, offset)
         -- the regenerated _30_ schematics lay carpets/wool and beds
         -- over the centre of some houses (the deserthouse4 centre
         -- column reads wool all the way down): widen the probe ring
-        -- to +/-2 so a furnished centre no longer hides the floor
+        -- to +/-2 so a furnished centre no longer hides the floor.
+        -- A +/-2 ring was still not enough for the widened families:
+        -- town_house_tiny_1 carries a 5x5 wool carpet EXACTLY on the
+        -- centre (2026-11-09 audit), so the ring grows to +/-3 and
+        -- the very small footprints (< 7 interior) additionally probe
+        -- their corners (deterministic fixed order)
         {cx - 2, cz}, {cx + 2, cz}, {cx, cz - 2}, {cx, cz + 2},
+        {cx - 3, cz}, {cx + 3, cz}, {cx, cz - 3}, {cx, cz + 3},
+        {cx - 1, cz - 1}, {cx + 1, cz + 1},
     }
+    -- ASCENDING scan (2026-11-09, world "maisons" report: the ladder
+    -- emerged on the FIRST FLOOR): the historical descending loop
+    -- elected the HIGHEST floor of the probe window first -- a loft,
+    -- mezzanine or upper storey slab passing the same open-above
+    -- tests as the ground floor (lumberjack_15: desc elected y=7, the
+    -- real ground floor sits at y=3). The cellar belongs under the
+    -- LOWEST floor: the loop now walks UPWARD from y0-5, so the first
+    -- candidate met is the ground floor
     for _, col in ipairs(columns) do
         local x, z = col[1], col[2]
-        for y = y0 + 3, y0 - 5, -1 do
+        for y = y0 - 5, y0 + 3 do
             local floor_name = minetest.get_node({x = x, y = y, z = z}).name
             local above_name = minetest.get_node({x = x, y = y + 1, z = z}).name
             if is_walkable(floor_name)
@@ -452,22 +531,64 @@ local function scan_ladder_hole(prng, box, F)
     -- Graded relaxation ladder, strictest first (see the header note):
     -- P1/P2 are the historical passes, P3 accepts the single node
     -- ceiling strata of the new schematics, P4 drops the enclosure
-    -- test (open plan lofts), P5 is the last resort (floor + 2 open +
-    -- door clearance only). The door clearance also relaxes from 3 to
-    -- 2 at P3: the new huts are 8-12 nodes wide, DOOR_CLEAR 3 next to
-    -- an in-wall door blanks the whole window
+    -- test (open plan lofts), P5 is the furniture-free last resort
+    -- (floor + 2 open + door clearance only), P6 additionally accepts
+    -- a carpeted cell (wool:*/carpets:* only, never an inventory
+    -- node). The door clearance also relaxes from 3 to 2 at P3: the
+    -- new huts are 8-12 nodes wide, DOOR_CLEAR 3 next to an in-wall
+    -- door blanks the whole window
+    -- carpet detector: the floor coverings (wool:*, carpets:*) are the
+    -- only furniture a last resort pass may pierce -- the dig rewrites
+    -- the cell into a plain floor slab, which the carpet covered
+    -- anyway. Everything else (chest, furnace, stair, bed...) keeps
+    -- rejecting the cell: set_node over an inventory node would drop
+    -- its contents on the floor
+    local function is_carpet_node(name)
+        return name:sub(1, 5) == "wool:" or name:sub(1, 8) == "carpets:"
+    end
+
     local pass_levels = {
-        {neigh = "all8", run = ROOF_MIN_RUN, enc = true,  dc = DOOR_CLEAR},
-        {neigh = "all4", run = ROOF_MIN_RUN, enc = true,  dc = DOOR_CLEAR},
-        {neigh = "one",  run = 1,            enc = true,  dc = 2},
-        {neigh = "one",  run = 1,            enc = false, dc = 2},
-        {neigh = "none", run = 0,            enc = false, dc = 2},
+        {neigh = "all8", run = ROOF_MIN_RUN, enc = true,  dc = DOOR_CLEAR,
+         furn = "no"},
+        {neigh = "all4", run = ROOF_MIN_RUN, enc = true,  dc = DOOR_CLEAR,
+         furn = "no"},
+        {neigh = "one",  run = 1,            enc = true,  dc = 2, furn = "no"},
+        {neigh = "one",  run = 1,            enc = false, dc = 2, furn = "no"},
+        {neigh = "none", run = 0,            enc = false, dc = 2, furn = "no"},
+        -- P6 last resort: a carpeted cell may carry the hatch, never a
+        -- chest/furnace (inventory would be dropped)
+        {neigh = "none", run = 0,            enc = false, dc = 2,
+         furn = "carpet"},
     }
     local function valid(hx, hz, lvl)
         local floor_name = minetest.get_node({x = hx, y = F, z = hz}).name
         if not is_walkable(floor_name) or is_bed_node(floor_name)
+            or (is_furniture_or_stair(floor_name)
+                and (lvl.furn ~= "carpet" or not is_carpet_node(floor_name)))
             or not is_open(minetest.get_node({x = hx, y = F + 1, z = hz}).name)
             or not is_open(minetest.get_node({x = hx, y = F + 2, z = hz}).name) then
+            return false
+        end
+        -- LADDER cell test (world "maisons" report: the hatch opened
+        -- under a pillar/furniture): the hatch motif puts the climbing
+        -- column and the open trapdoor plate on the cardinal neighbour
+        -- towards the nearest wall -- that cell must be free TOO
+        -- (walkable floor + AIR at F+1 AND F+2), furniture or a
+        -- structural pillar standing on the floor up there would block
+        -- the emergence of the ladder. At least ONE of the four
+        -- neighbours has to qualify; dig_basement then picks exactly
+        -- such a direction (see the cand ladder guard there)
+        local ladder_ok = false
+        for _, d in ipairs(cardinals) do
+            local nx, nz = hx + d[1], hz + d[2]
+            if is_walkable(minetest.get_node({x = nx, y = F, z = nz}).name)
+                and is_open(minetest.get_node({x = nx, y = F + 1, z = nz}).name)
+                and is_open(minetest.get_node({x = nx, y = F + 2, z = nz}).name) then
+                ladder_ok = true
+                break
+            end
+        end
+        if not ladder_ok then
             return false
         end
         if lvl.neigh == "all8" or lvl.neigh == "all4" then
@@ -823,7 +944,14 @@ function Bs.dig_basement(job, opts)
     -- shaft flush against a wall); the cell BEYOND the ladder is its
     -- load bearing wall: the fill below writes it in floor material
     -- when it falls inside the interior, and it is the retained
-    -- foundation when already outside -- the ladder never floats
+    -- foundation when already outside -- the ladder never floats.
+    -- FREE-CELL guard (2026-11-09, world "maisons" report: the hatch
+    -- opened under a pillar/furniture): a direction whose neighbour
+    -- cell is NOT walkable-floor + AIR at F+1 AND F+2 is skipped --
+    -- scan_ladder_hole validated the hole column with the same test
+    -- but this loop picked the nearest wall blindly, and the trapdoor
+    -- plate/ladder then emerged under a structural pillar or a
+    -- furniture piece standing on that cell
     local cand = {
         -- wm = wallmounted of the support wall the ladder leans on
         -- (canonical: 2=x+, 3=x-, 4=z+, 5=z-); order keeps the
@@ -842,7 +970,13 @@ function Bs.dig_basement(job, opts)
     local ladder, ladder_wm, support = nil, nil, nil
     for _, c in ipairs(cand) do
         local lx, lz = hole.x + c.dx, hole.z + c.dz
-        if lx >= ix1 and lx <= ix2 and lz >= iz1 and lz <= iz2 then
+        if lx >= ix1 and lx <= ix2 and lz >= iz1 and lz <= iz2
+            and is_walkable(minetest.get_node(
+                {x = lx, y = floor_y, z = lz}).name)
+            and is_open(minetest.get_node(
+                {x = lx, y = floor_y + 1, z = lz}).name)
+            and is_open(minetest.get_node(
+                {x = lx, y = floor_y + 2, z = lz}).name) then
             ladder = {x = lx, z = lz}
             ladder_wm = c.wm
             support = {x = lx + c.dx, z = lz + c.dz}
@@ -1247,11 +1381,18 @@ function Bs.maybe_dig_basement(job)
 
     -- e) mutual exclusion with the hidden randungeon entrances: exact
     --    replay of THEIR draw (same world seed stream, same chance),
-    --    run only when their module would have drawn too (their own
-    --    installed/enabled/house/foundation guards are the ones we
-    --    just passed); when the house carries a dungeon, the basement
-    --    gives up
-    if rd_installed and rd_enabled then
+    --    run only when their module would have drawn too. Their
+    --    eligibility is NARROWER than ours: dungeon_entrances.lua
+    --    additionally requires the "_30_" schematic name (its 30 node
+    --    foundation test, 2026-11-09 audit: replaying the draw for a
+    --    non _30_ house stole rd_chance (20%) of the basements of the
+    --    widened families for nothing -- that house could never carry
+    --    a dungeon); skipping the replay when they cannot draw keeps
+    --    the exclusion exact. When the house carries a dungeon, the
+    --    basement gives up
+    if rd_installed and rd_enabled
+        and type(job.schematic) == "string"
+        and job.schematic:find("_30_", 1, true) then
         local dprng = PcgRandom(WORLD_SEED, box.x1, box.y1, box.z1)
         if dprng:next(0, 999999) / 999999 < rd_chance then
             return
