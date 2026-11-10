@@ -1,5 +1,3 @@
-local S = minetest.get_translator("nativevillages")
-
 -- Data driven definitions of the arctic buildings. Every entry is
 -- passed to nativevillages.placement.register_building() (placement.lua),
 -- which decides how the building is actually placed.

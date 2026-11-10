@@ -46,15 +46,6 @@ nativevillages.placement_density (Native Villages placement density) float 0.000
 # (new placement engine only; default false = historical behaviour)
 nativevillages.relax_altitude (Native Villages relax altitude bands) bool false
 
-# Swamp behaviour: the swamp biome family (swamp, swampz, alderswamp,
-# bog, mangrove, ...) receives the grassland buildings re-registered as
-# *_swamp variants, anchored like stilt houses: the site must stand in
-# SHALLOW water (at most 3 nodes between the surface and the bed) inside
-# the 0..10 altitude band, the flatness test compares the water surface
-# instead of the muddy bed, and the schematic is anchored on the water
-# surface so its 30 node foundation emerges from the swamp (automatic
-# with the default offset).
-#
 # Minimum empty space (nodes) enforced around every building placed by
 # the new engine: a candidate site whose footprint expanded by this
 # margin overlaps the footprint of an already placed building is

@@ -134,28 +134,6 @@ if minetest.get_modpath("pathv7") and minetest.get_perlin then
     end
 end
 
--- True when a pathv7 path crosses the column (x, z) or one of its 4
--- neighbours, mirroring the sign change detection of pathv7 itself
--- (it paints where a noise changes sign between (x,z) and (x+1,z) or
--- (x,z) and (x,z+1), so the painted brush spans up to 2 nodes around
--- the crossing). Cheap enough for a coarse scan: 4 noises x a handful
--- of nodes
-local function path_at(x, z)
-    if not path_noise then
-        return false
-    end
-    for _, n in ipairs(path_noise) do
-        local c = n:get2d({x = x, y = z})
-        if c * n:get2d({x = x + 1, y = z}) <= 0 then
-            return true
-        end
-        if c * n:get2d({x = x, y = z + 1}) <= 0 then
-            return true
-        end
-    end
-    return false
-end
-
 -- Nearest path point around (x, z) within radius (nil when none);
 -- only the EXISTENCE matters (the village grows when a path runs
 -- near, the core is not moved). A pathv7 path is a zero crossing

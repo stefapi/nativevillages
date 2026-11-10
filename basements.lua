@@ -46,7 +46,6 @@
 -- consumed in a fixed order: the chance draw, the hole scan origin
 -- (x, z), the level count, then per level the item count, the
 -- perimeter walk origin and one pool index per placed item.
---e
 -- The dig itself, ONE VoxelManip for the whole cellar:
 --   * n levels of LEVEL_H = 4 interior height, one floor slab under
 --     each level, total depth BUFFER + n * (LEVEL_H + 1) <= MAX_DEPTH
